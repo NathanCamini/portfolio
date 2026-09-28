@@ -1,22 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent } from 'react';
-import { gameConfig } from '@/config/game';
 import { CornersIn, CornersOut, Close, Trophy } from '@/components/ui/icons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { htmlLang } from '@/i18n/config';
 import { useI18n } from '@/i18n/I18nProvider';
+import { celebrate, originOf } from '@/lib/confetti';
+import type { Mode, StageId } from './engine/stages';
+import { saveCampaignStage, savedCampaignStage, savedMode, saveMode, type CampaignStage } from './progress';
 import { RankingOverlay } from './RankingOverlay';
 import { useRanking } from './useRanking';
-import { useVolleyballGame, type GameKey } from './useVolleyballGame';
+import { useVolleyballGame, type GameKey, type MatchEnd } from './useVolleyballGame';
 import styles from './VolleyballGame.module.css';
 
 const noopSubscribe = () => () => {};
 
 /**
- * The expanded game panel: toolbar (controls hint, leaderboard, fullscreen,
- * close), the canvas stage with the leaderboard overlay, and on-screen
- * buttons for touch devices.
+ * The expanded game panel: toolbar (controls hint, campaign/Endless switch,
+ * leaderboard, fullscreen, close), the canvas stage with the leaderboard
+ * overlay, and on-screen buttons for touch devices.
  * Mounted only while open, so the game loop exists only while it's visible.
  */
 export function VolleyballGame({ id, onClose }: { id: string; onClose: () => void }) {
@@ -37,17 +39,45 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
   const ranking = useRanking();
   const overlayOpen = ranking.view.kind !== 'closed';
 
-  const { press, release, action, restart } = useVolleyballGame({
+  // Campaign progress and the last mode come back on the next visit (see progress.ts).
+  const [mode, setMode] = useState<Mode>(savedMode);
+  const [campaign, setCampaign] = useState<CampaignStage>(savedCampaignStage);
+  const [stage, setStage] = useState<StageId>(() => (mode === 'endless' ? 'endless' : campaign));
+
+  const onStage = (next: StageId) => {
+    setStage(next);
+    if (next !== 'endless') {
+      setCampaign(next);
+      saveCampaignStage(next);
+    }
+  };
+  const onFinish = (end: MatchEnd) => {
+    // Only Endless is ranked; campaign wins get confetti (a big burst for the boss).
+    if (end.stage === 'endless') ranking.finish({ points: end.points, durationMs: end.durationMs });
+    else if (end.won) void celebrate(originOf(canvasRef.current), end.stage === 'boss' ? 1.8 : 0.8);
+  };
+
+  const { press, release, action, restart, selectStage } = useVolleyballGame({
     canvasRef,
     stageRef,
     panelRef,
     strings: vb.game,
-    cpuLevel: gameConfig.cpuLevel,
-    winScore: gameConfig.winScore,
+    initialStage: stage,
     locked: overlayOpen,
-    onKickoff: ranking.kickoff,
-    onFinish: ranking.finish,
+    onKickoff: (s) => s === 'endless' && ranking.kickoff(),
+    onStage,
+    onFinish,
   });
+
+  const switchMode = (next: Mode) => {
+    const target = next === 'endless' ? 'endless' : campaign;
+    setMode(next);
+    saveMode(next);
+    setStage(target);
+    selectStage(target);
+    ranking.close();
+    canvasRef.current?.focus({ preventScroll: true });
+  };
 
   // Overlay closed: keys go back to the game.
   const wasOpen = useRef(false);
@@ -88,18 +118,34 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
     <div
       id={id}
       ref={panelRef}
-      className={`${styles.panel} ${overlayOpen ? styles.withOverlay : ''}`}
+      className={`${styles.panel} ${overlayOpen ? styles.withOverlay : ''} ${stage === 'boss' ? styles.boss : ''}`}
       data-no-cursor=""
     >
       <div className={styles.toolbar}>
         <span className={styles.controls}>{vb.controls}</span>
         <div className={styles.actions}>
+          <div className={`seg ${styles.modes}`} role="radiogroup" aria-label={vb.mode.label}>
+            {(['campaign', 'endless'] as const).map((m) => (
+              <label key={m} className="seg-opt">
+                <input
+                  type="radio"
+                  name={`${id}-mode`}
+                  value={m}
+                  checked={mode === m}
+                  onChange={() => switchMode(m)}
+                  // The name form holds an unsaved run: finish or skip it first.
+                  disabled={ranking.view.kind === 'form'}
+                />
+                {vb.mode[m]}
+              </label>
+            ))}
+          </div>
           <button
             type="button"
             className={`btn btn-secondary ${styles.toolBtn}`}
             onClick={ranking.view.kind === 'board' ? ranking.close : ranking.openBoard}
             aria-pressed={ranking.view.kind === 'board'}
-            // The name form holds an unsaved match: finish or skip it first.
+            // The name form holds an unsaved run: finish or skip it first.
             disabled={ranking.view.kind === 'form'}
           >
             <Trophy size={14} />
@@ -130,7 +176,6 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
           <RankingOverlay
             view={ranking.view}
             strings={vb.ranking}
-            game={vb.game}
             lang={htmlLang[locale]}
             onSave={(name) => void ranking.save(name)}
             onEdit={ranking.clearError}

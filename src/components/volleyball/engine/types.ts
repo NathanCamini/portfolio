@@ -1,3 +1,5 @@
+import type { Stage } from './stages';
+
 /** title → serve → play → point → (serve | over) → serve … */
 export type Phase = 'title' | 'serve' | 'play' | 'point' | 'over';
 
@@ -31,7 +33,11 @@ export interface GameState {
   matchTime: number;
   server: Side;
   lastScorer: Side | null;
-  cpuSpeed: number;
-  winScore: number;
+  /** Current stage: CPU profile, score limits, arena theme. */
+  stage: Stage;
+  /** Side of the net the ball is on (0 = player), to notice each new ball coming to the CPU. */
+  ballSide: Side;
+  /** How far off the CPU stands for the current ball (0 = reads it right). */
+  cpuMiss: number;
   stars: [x: number, y: number, r: number][];
 }

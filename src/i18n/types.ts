@@ -54,14 +54,27 @@ export interface AiFlow {
 }
 
 export interface GameStrings {
-  title: string;
   start: string;
   you: string;
   cpu: string;
+  /** Scoreboard label for the phase 2 opponent. */
+  boss: string;
   pYou: string;
   pCpu: string;
-  win: string;
+  pBoss: string;
+  /** Title screen of each stage. */
+  stages: Record<'easy' | 'boss' | 'endless', { title: string; sub: string }>;
+  /** Phase 1 lost. */
   lose: string;
+  retry: string;
+  /** Phase 1 won: the boss is next. */
+  phaseClear: string;
+  toBoss: string;
+  bossWin: string;
+  bossLose: string;
+  rematch: string;
+  /** `{n}` = points scored before the CPU reached its limit. */
+  endlessOver: string;
   again: string;
 }
 
@@ -70,6 +83,8 @@ export interface RankingStrings {
   button: string;
   title: string;
   subtitle: string;
+  /** Overlay kicker when an Endless run ends. */
+  runOver: string;
   points: string;
   scoreHelp: string;
   nameLabel: string;
@@ -86,7 +101,6 @@ export interface RankingStrings {
   newBest: string;
   /** `{best}` = the player's standing record. */
   keptBest: string;
-  noPoints: string;
   offline: string;
   errors: {
     length: string;
@@ -192,6 +206,8 @@ export interface Dictionary {
     play: string;
     fab: string;
     teaserAlt: string;
+    /** Toolbar switch between the campaign and Endless. */
+    mode: { label: string; campaign: string; endless: string };
     game: GameStrings;
     ranking: RankingStrings;
   };

@@ -2,7 +2,8 @@
 
 Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
 biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
-pelo scroll, um **mini-jogo de vôlei de praia com ranking global** (Cloudflare Workers + D1) e um **Peek Trainer** no
+pelo scroll, um **mini-jogo de vôlei de praia** (campanha com chefe + modo endless com ranking global em Cloudflare
+Workers + D1) e um **Peek Trainer** no
 estilo Rainbow Six Siege.
 
 ```bash
@@ -28,9 +29,9 @@ Só `/api/*` passa pelo código do Worker (`worker/index.ts`); todo o resto sai 
 ### Ranking do vôlei: banco D1, sem passo manual
 
 O binding `DB` tem só `database_name` (`portfolio-ranking`): o primeiro `wrangler deploy` cria o banco na sua conta
-e os seguintes reaproveitam. As tabelas são criadas pelo próprio Worker na primeira requisição, a partir de
-`migrations/0001_volley_ranking.sql` (idempotente). Para mudanças futuras de schema, crie `migrations/0002_….sql` e
-rode `npm run db:migrate`. Deploys de _preview_ (branches) não recebem banco: o jogo funciona e o ranking aparece
+e os seguintes reaproveitam. O próprio Worker cria as tabelas que faltarem, a partir dos arquivos de `migrations/`
+(todos idempotentes), na primeira requisição que precisar delas — foi assim que `0002_volley_endless.sql` (o ranking
+do endless) entra num banco que já existia. `npm run db:migrate` aplica as migrations pela CLI, se preferir. Deploys de _preview_ (branches) não recebem banco: o jogo funciona e o ranking aparece
 como indisponível, o que mantém testes fora do ranking real.
 
 ### Currículo: PDF e API
@@ -106,7 +107,7 @@ src/
 │  ├─ globals.css            # tokens Nocturne + classes .btn/.card/.tag/.seg
 │  ├─ fonts.ts, sitemap.ts, robots.ts
 ├─ config/site.ts            # nome, e-mail, redes, cor/acabamento do carro
-├─ config/game.ts            # dificuldade da CPU e pontos por partida (lido também pelo Worker)
+├─ config/game.ts            # pontos por fase e limite da CPU no endless (lido também pelo Worker)
 ├─ i18n/                     # config, detect (idioma do sistema), dicionários pt/en, I18nProvider
 ├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts
 ├─ hooks/                    # useTypewriter, useMediaQuery
@@ -159,21 +160,29 @@ causam nenhum re-render do React (Motion values e refs lidos no `useFrame`).
 sem a bola atravessar a rede), IA que prevê o ponto de queda, quadra lógica 960×540 com letterbox. O teclado só é
 capturado com o painel visível. Tela cheia pela Fullscreen API; controles touch em telas `pointer: coarse`.
 
+**Modos.** A **campanha** tem duas fases de 7 pontos: a fase 1, na praia, contra uma CPU mais lenta que erra a
+leitura de parte das bolas; e a fase 2, contra o **Endiabrado** — maior, muito mais rápido, que pula cedo e crava
+toda bola — numa arena vermelha (céu em brasa, lua de sangue, lava, brasas subindo, vinheta pulsando, tela tremendo
+a cada ponto dele). Só chega ao chefe quem vence a fase 1; quem perde repete a fase em que está, e o progresso fica
+salvo no navegador. O **endless** é à parte: a CPU original, sem limite de pontos para o jogador, e acaba quando a
+CPU chega a 7 — é o único modo que vale ranking. A dificuldade é medida, não chutada: um bot que joga como a CPU
+original (espelhado para o lado do jogador) enfrenta cada perfil em partidas com sementes fixas. Contra ele, a fase
+1 perde todas, a CPU do endless perde 76% (idêntica à original, ponto a ponto nas mesmas sementes) e o chefe vence
+97%. Os testes travam essa ordem (`engine/physics.test.ts`).
+
 **Ranking global.** Três endpoints num Worker (`GET /api/volley/ranking`, `POST /api/volley/matches`,
-`POST /api/volley/scores`) sobre um D1. O top 10 mostra a **melhor partida de cada jogador** (nome sem diferenciar
-maiúsculas/acentos), com empate decidido por quem chegou primeiro — uma única query com `ROW_NUMBER()`.
-Pontuação: 100 por ponto feito, −20 por ponto sofrido, +500 pela vitória e até +300 por vencer rápido.
+`POST /api/volley/scores`) sobre um D1. Vale quantos pontos você faz no endless antes de a CPU chegar a 7. O top 10
+mostra a **melhor corrida de cada jogador** (nome sem diferenciar maiúsculas/acentos), com empate decidido por quem
+chegou primeiro — uma única query com `ROW_NUMBER()`.
 
 Validação contra trapaça, em camadas:
 
-- **O cliente nunca envia a pontuação.** Envia só o placar e o relógio da partida; o Worker recalcula os pontos.
-- **Placar possível:** exatamente um lado com 7 pontos, inteiros, e nenhum 0 × 7 (vale 0 ponto).
 - **Tempo mínimo por ponto**, derivado das próprias constantes do motor (a bola paira 900 ms no saque e há 1,2 s de
-  pausa após cada ponto): 7 × 0 em 5 s é recusado.
+  pausa após cada ponto). Conta os seus pontos e os 7 da CPU: 100 pontos em 1 minuto é recusado.
 - **Relógio do servidor:** no apito inicial o jogo pede um _ticket_ (UUID aleatório). Na hora de salvar, a duração
   informada não pode passar do tempo que o servidor viu desde a emissão do ticket (+5 s de folga de rede).
 - **Um ticket, uma pontuação:** o insert e o consumo do ticket acontecem na mesma transação (batch do D1), com
-  `UNIQUE(match_id)` de reserva — reenviar a requisição não duplica a pontuação. Tickets expiram em 1 h.
+  `UNIQUE(match_id)` de reserva — reenviar a requisição não duplica a pontuação. Tickets expiram em 3 h.
 - **Rate limiting** por IP (binding nativo da Cloudflare): 6 partidas e 10 envios por minuto.
 - **Nome:** 3–16 caracteres, só letras latinas, números, espaço, `_` e `-`; nomes reservados (admin, CPU…) e
   palavrões/ofensas em PT e EN recusados mesmo disfarçados (maiúsculas, acentos, leetspeak `p0rr4`, separadores
@@ -202,7 +211,8 @@ teclado (setas / Home), texto do terminal de IA exposto por inteiro a leitores d
 ## Personalização
 
 - Textos: `src/i18n/dictionaries/pt.ts` e `en.ts` (os `[colchetes]` são placeholders do design).
-- Contato, cor/acabamento do carro: `src/config/site.ts`. Dificuldade da CPU e pontos por partida:
-  `src/config/game.ts` (mudar isso muda o significado das pontuações: comece um ranking novo).
+- Contato, cor/acabamento do carro: `src/config/site.ts`. Pontos por fase e limite da CPU no endless:
+  `src/config/game.ts` (mudar o limite muda o significado do ranking: comece um novo). Perfis de dificuldade da
+  CPU (fase 1, endless, chefe): `CPU` em `src/components/volleyball/engine/constants.ts`.
 - Lista de palavras bloqueadas nos nomes: `src/components/volleyball/ranking/nickname.ts`.
 - Cores: tokens em `src/app/globals.css` — o canvas do jogo e a cena 3D leem os mesmos tokens.

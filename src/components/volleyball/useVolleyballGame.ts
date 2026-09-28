@@ -3,13 +3,24 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { GameStrings } from '@/i18n/types';
 import { readPalette } from '@/lib/palette';
-import { CPU_SPEED, TIMING, type CpuLevel } from './engine/constants';
-import { createGame, primaryAction, stepGame } from './engine/physics';
+import { TIMING } from './engine/constants';
+import { createGame, playerWon, primaryAction, setStage, stepGame } from './engine/physics';
 import { renderGame, type View } from './engine/render';
+import type { StageId } from './engine/stages';
 import type { GameState, Input } from './engine/types';
-import type { MatchResult } from './ranking/match';
 
 export type GameKey = keyof Input;
+
+/** The final whistle of any stage. */
+export interface MatchEnd {
+  stage: StageId;
+  /** Points the player scored (the Endless result). */
+  points: number;
+  /** The player reached the stage's win score (never in Endless). */
+  won: boolean;
+  /** The engine's match clock. */
+  durationMs: number;
+}
 
 const KEYMAP: Record<string, GameKey> = {
   ArrowLeft: 'left',
@@ -29,14 +40,15 @@ interface Options {
   stageRef: RefObject<HTMLElement | null>;
   panelRef: RefObject<HTMLElement | null>;
   strings: GameStrings;
-  cpuLevel: CpuLevel;
-  winScore: number;
+  /** Stage shown when the panel opens; afterwards use `selectStage`. */
+  initialStage: StageId;
   /** An overlay (leaderboard) is open: simulation paused, keys left to the page, no new match. */
   locked: boolean;
   /** A new match just kicked off. */
-  onKickoff: () => void;
-  /** The final whistle, with the scoreline and the engine's match clock. */
-  onFinish: (result: MatchResult) => void;
+  onKickoff: (stage: StageId) => void;
+  /** The engine moved on to another stage's title screen (phase 1 won → the boss). */
+  onStage: (stage: StageId) => void;
+  onFinish: (end: MatchEnd) => void;
 }
 
 /**
@@ -48,24 +60,26 @@ interface Options {
  * - Game state and input live in refs: 60+ updates/s never touch React.
  * - Keyboard is only captured while the panel is on screen (or fullscreen),
  *   so arrows/space keep scrolling the page everywhere else.
- * - Kickoff and final whistle are reported to the caller (ranking tickets).
+ * - Kickoff, stage changes and the final whistle are reported to the caller
+ *   (campaign progress, ranking tickets).
  */
 export function useVolleyballGame({
   canvasRef,
   stageRef,
   panelRef,
   strings,
-  cpuLevel,
-  winScore,
+  initialStage,
   locked,
   onKickoff,
+  onStage,
   onFinish,
 }: Options) {
   const game = useRef<GameState | null>(null);
   const input = useRef<Input>({ left: false, right: false, jump: false });
   const stringsRef = useRef(strings);
   const lockedRef = useRef(locked);
-  const events = useRef({ onKickoff, onFinish });
+  const firstStage = useRef(initialStage);
+  const events = useRef({ onKickoff, onStage, onFinish });
 
   useEffect(() => {
     stringsRef.current = strings; // language switch mid-match updates the canvas copy
@@ -77,14 +91,15 @@ export function useVolleyballGame({
   }, [locked]);
 
   useEffect(() => {
-    events.current = { onKickoff, onFinish };
+    events.current = { onKickoff, onStage, onFinish };
   });
 
-  /** Primary action, reporting a kickoff when it starts a match. */
+  /** Primary action, reporting what it did: a kickoff, or the move to the next campaign phase. */
   const kick = useCallback((g: GameState) => {
-    const before = g.phase;
+    const { phase, stage } = g;
     primaryAction(g);
-    if (g.phase !== before) events.current.onKickoff();
+    if (g.stage !== stage) events.current.onStage(g.stage.id);
+    else if (g.phase !== phase) events.current.onKickoff(g.stage.id);
   }, []);
 
   useEffect(() => {
@@ -94,7 +109,7 @@ export function useVolleyballGame({
     if (!canvas || !stage || !ctx) return;
 
     const palette = readPalette();
-    const g = createGame(CPU_SPEED[cpuLevel], winScore);
+    const g = createGame(firstStage.current);
     game.current = g;
     const view: View = { w: 1, h: 1, dpr: 1 };
 
@@ -132,7 +147,12 @@ export function useVolleyballGame({
         acc -= TIMING.STEP;
       }
       if (before !== 'over' && g.phase === 'over') {
-        events.current.onFinish({ player: g.score[0], cpu: g.score[1], durationMs: Math.round(g.matchTime) });
+        events.current.onFinish({
+          stage: g.stage.id,
+          points: g.score[0],
+          won: playerWon(g),
+          durationMs: Math.round(g.matchTime),
+        });
       }
       renderGame(ctx, g, view, palette, stringsRef.current);
     };
@@ -170,7 +190,7 @@ export function useVolleyballGame({
       window.removeEventListener('blur', onBlur);
       game.current = null;
     };
-  }, [canvasRef, stageRef, panelRef, cpuLevel, winScore, kick]);
+  }, [canvasRef, stageRef, panelRef, kick]);
 
   const press = useCallback(
     (k: GameKey) => {
@@ -190,6 +210,10 @@ export function useVolleyballGame({
   const restart = useCallback(() => {
     if (game.current) kick(game.current);
   }, [kick]);
+  /** Mode switch: that stage's title screen (a match in progress is dropped). */
+  const selectStage = useCallback((id: StageId) => {
+    if (game.current) setStage(game.current, id);
+  }, []);
 
-  return { press, release, action, restart };
+  return { press, release, action, restart, selectStage };
 }

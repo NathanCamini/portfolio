@@ -1,13 +1,14 @@
 /**
  * Beach-volley match rules. Kept apart from site.ts because the ranking Worker
- * (worker/) imports it too: the server checks submitted scores against the
- * same win score the game is played to.
+ * (worker/) imports them too: the server checks Endless results against the
+ * same limit the game is played to.
  *
- * Changing either value changes what a score means, so start a fresh
- * leaderboard (new D1 database or empty `volley_scores`) when you do.
+ * Changing `endlessCpuScore` changes what a leaderboard score means, so start
+ * a fresh leaderboard (empty `volley_endless`) when you do.
  */
 export const gameConfig = {
-  /** CPU top speed. */
-  cpuLevel: 'normal' as 'easy' | 'normal' | 'hard',
-  winScore: 7,
+  /** Points that win each campaign phase (phase 1 and the boss). */
+  phaseWinScore: 7,
+  /** Endless ends when the CPU reaches this; the player has no limit. */
+  endlessCpuScore: 7,
 };

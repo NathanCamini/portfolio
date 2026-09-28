@@ -21,7 +21,6 @@ export const PHYSICS = {
   PLAYER_GRAVITY: 0.75,
   PLAYER_SPEED: 7,
   PLAYER_JUMP: -13.5,
-  CPU_JUMP: -12.5,
   PLAYER_RADIUS: 44,
   BALL_RADIUS: 13,
   /** 1 + restitution for ball ↔ player (0.9) and ball ↔ net (0.75). */
@@ -44,5 +43,30 @@ export const TIMING = {
   POINT_PAUSE_MS: 1200,
 } as const;
 
-export const CPU_SPEED = { easy: 4.2, normal: 5.4, hard: 6.6 } as const;
-export type CpuLevel = keyof typeof CPU_SPEED;
+/** How the CPU plays. Units as above (px and px/frame at 60 fps). */
+export interface CpuProfile {
+  /** Top walking speed. */
+  speed: number;
+  /** Jump velocity. */
+  jump: number;
+  /** Chance per frame of jumping while the ball drops within reach: higher = earlier, harder hits. */
+  jumpChance: number;
+  /** Where it stands relative to the predicted landing point; + is behind it, pushing the ball over the net. */
+  offset: number;
+  /** Share of balls it misjudges, standing `misread` px off the right spot for that ball. */
+  misreadChance: number;
+  misread: number;
+  /** Body radius: a bigger opponent reaches more of the court. */
+  radius: number;
+  /** Extra speed sent towards the player on every touch (0 = plain bounce). */
+  spike: number;
+}
+
+export const CPU = {
+  /** Phase 1: slower, softer, and misjudges a third of the balls. */
+  easy: { speed: 4.4, jump: -12, jumpChance: 0.06, offset: 16, misreadChance: 0.22, misread: 70, radius: 44, spike: 0 },
+  /** The original opponent, kept exactly as it was: Endless is played against it. */
+  normal: { speed: 5.4, jump: -12.5, jumpChance: 0.08, offset: 16, misreadChance: 0, misread: 0, radius: 44, spike: 0 },
+  /** Phase 2, the boss: bigger, much faster, jumps early and spikes every ball; misjudges only rarely. */
+  boss: { speed: 9, jump: -14, jumpChance: 0.3, offset: 22, misreadChance: 0.06, misread: 70, radius: 54, spike: 3 },
+} satisfies Record<string, CpuProfile>;

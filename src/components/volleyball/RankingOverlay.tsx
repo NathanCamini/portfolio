@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import type { GameStrings, RankingStrings } from '@/i18n/types';
+import type { RankingStrings } from '@/i18n/types';
 import { celebrate, originOf } from '@/lib/confetti';
-import type { LeaderboardEntry, MatchResult } from './ranking/match';
+import type { EndlessResult, LeaderboardEntry } from './ranking/match';
 import { NAME_MAX } from './ranking/nickname';
 import { rememberedName, type RankingView } from './useRanking';
 import styles from './RankingOverlay.module.css';
@@ -11,7 +11,6 @@ import styles from './RankingOverlay.module.css';
 interface Props {
   view: Exclude<RankingView, { kind: 'closed' }>;
   strings: RankingStrings;
-  game: GameStrings;
   /** BCP 47 tag for number formatting (1.486 vs 1,486). */
   lang: string;
   onSave: (name: string) => void;
@@ -27,11 +26,11 @@ const clock = (ms: number) => {
 };
 
 /**
- * Layer over the court for the global leaderboard: the name form at the final
- * whistle, the board after saving, or the board on its own (toolbar button).
+ * Layer over the court for the global leaderboard: the name form when an
+ * Endless run ends, the board after saving, or the board on its own (toolbar button).
  * The game is paused and ignores the keyboard while this is open.
  */
-export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, onBoard, onAgain, onClose }: Props) {
+export function RankingOverlay({ view, strings: R, lang, onSave, onEdit, onBoard, onAgain, onClose }: Props) {
   const titleId = useId();
   const inputId = useId();
   const errorId = useId();
@@ -69,18 +68,12 @@ export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, o
     onSave(name);
   };
 
-  const header = (result: MatchResult, score: number) => (
+  const header = (result: EndlessResult) => (
     <header className={styles.result}>
-      <p className={styles.kicker}>{result.player > result.cpu ? game.win : game.lose}</p>
+      <p className={styles.kicker}>{R.runOver}</p>
       <p className={styles.scoreline}>
-        <span aria-hidden="true">
-          {result.player} × {result.cpu}
-        </span>
-        <span className="sr-only">{`${game.you} ${result.player} · ${game.cpu} ${result.cpu}`}</span>
+        {fmt(result.points)} <span className={styles.unit}>{R.points}</span>
         <span className={styles.meta}> · {clock(result.durationMs)}</span>
-      </p>
-      <p className={styles.points}>
-        <strong>{fmt(score)}</strong> {R.points}
       </p>
     </header>
   );
@@ -94,10 +87,8 @@ export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, o
           <li key={`${i}-${e.name}`} className={i === mine ? styles.mine : undefined}>
             <span className={styles.rank}>{i + 1}</span>
             <span className={styles.name}>{e.name}</span>
-            <span className={styles.line}>
-              {e.player}×{e.cpu}
-            </span>
-            <span className={styles.score}>{fmt(e.score)}</span>
+            <span className={styles.line}>{clock(e.durationMs)}</span>
+            <span className={styles.score}>{fmt(e.points)}</span>
           </li>
         ))}
       </ol>
@@ -120,7 +111,7 @@ export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, o
           <h3 id={titleId} className="sr-only">
             {R.title}
           </h3>
-          {header(view.result, view.score)}
+          {header(view.result)}
           <label htmlFor={inputId} className={styles.label}>
             {R.nameLabel}
           </label>
@@ -187,9 +178,9 @@ export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, o
           <h3 id={titleId} className="sr-only">
             {R.title}
           </h3>
-          {header(view.result, view.score)}
+          {header(view.result)}
           <p className={styles.note} role="status">
-            {view.message === 'noPoints' ? R.noPoints : view.message === 'offline' ? R.offline : R.errors[view.message]}
+            {view.message === 'offline' ? R.offline : R.errors[view.message]}
           </p>
           <div className={styles.actions}>
             <button type="button" className="btn btn-primary" data-primary="" onClick={onAgain}>

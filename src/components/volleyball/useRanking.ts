@@ -2,13 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { fetchTop, openMatch, submitScore } from './ranking/api';
-import {
-  scoreMatch,
-  type ApiErrorBody,
-  type LeaderboardEntry,
-  type MatchResult,
-  type SubmitResponse,
-} from './ranking/match';
+import { type ApiErrorBody, type EndlessResult, type LeaderboardEntry, type SubmitResponse } from './ranking/match';
 import { checkNickname, type NameProblem } from './ranking/nickname';
 
 /** Everything the overlay can tell the player went wrong (keys of `RankingStrings.errors`). */
@@ -18,12 +12,12 @@ export type RankingView =
   | { kind: 'closed' }
   /** Opened from the toolbar. `top` is null while loading or on error. */
   | { kind: 'board'; top: LeaderboardEntry[] | null; error: RankingError | null }
-  /** Final whistle: ask for a name. */
-  | { kind: 'form'; result: MatchResult; score: number; matchId: string; busy: boolean; error: RankingError | null }
+  /** An Endless run just ended: ask for a name. */
+  | { kind: 'form'; result: EndlessResult; matchId: string; busy: boolean; error: RankingError | null }
   /** Saved: the board with the player's standing. */
-  | { kind: 'saved'; result: MatchResult; saved: SubmitResponse }
-  /** Final whistle with nothing to save, or a save the server refused for good. */
-  | { kind: 'final'; result: MatchResult; score: number; message: 'noPoints' | 'offline' | 'rejected' | 'expired' };
+  | { kind: 'saved'; result: EndlessResult; saved: SubmitResponse }
+  /** Run over with the ranking unreachable, or a save the server refused for good. */
+  | { kind: 'final'; result: EndlessResult; message: 'offline' | 'rejected' | 'expired' };
 
 const NAME_KEY = 'volley-ranking-name';
 
@@ -61,8 +55,9 @@ function toError({ error, reason }: ApiErrorBody): RankingError {
 }
 
 /**
- * Global leaderboard flow around a match: a ticket is requested at kickoff,
- * the name form opens at the final whistle, and the save returns the board.
+ * Global leaderboard flow around an Endless run: a ticket is requested at
+ * kickoff, the name form opens when the CPU reaches its limit, and the save
+ * returns the board.
  * The name is checked here first for instant feedback; the Worker checks it
  * again, so a tampered client still can't save a banned name.
  */
@@ -74,19 +69,16 @@ export function useRanking() {
     ticket.current = openMatch().then((r) => (r.ok ? r.data.matchId : null));
   }, []);
 
-  const finish = useCallback((result: MatchResult) => {
-    const score = scoreMatch(result);
+  /** An Endless run ended (the CPU reached its limit). */
+  const finish = useCallback((result: EndlessResult) => {
     const pending = ticket.current ?? Promise.resolve(null);
     ticket.current = null;
-    if (score <= 0) {
-      setView({ kind: 'final', result, score, message: 'noPoints' });
-      return;
-    }
+    // Every finished run asks for a name, even a 0-point one: the board then shows where it landed.
     void pending.then((matchId) =>
       setView(
         matchId
-          ? { kind: 'form', result, score, matchId, busy: false, error: null }
-          : { kind: 'final', result, score, message: 'offline' },
+          ? { kind: 'form', result, matchId, busy: false, error: null }
+          : { kind: 'final', result, message: 'offline' },
       ),
     );
   }, []);
@@ -108,7 +100,7 @@ export function useRanking() {
       }
       const error = toError(res.error);
       if (error === 'rejected' || error === 'expired') {
-        setView({ kind: 'final', result: view.result, score: view.score, message: error });
+        setView({ kind: 'final', result: view.result, message: error });
       } else {
         setView({ ...view, busy: false, error });
       }

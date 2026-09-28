@@ -1,17 +1,19 @@
 import type { LeaderboardEntry, SubmitResponse } from '../src/components/volleyball/ranking/match';
-import schema from '../migrations/0001_volley_ranking.sql';
+import ranking from '../migrations/0001_volley_ranking.sql';
+import endless from '../migrations/0002_volley_endless.sql';
 
-/** The migration's statements (it has no `;` or `--` inside string literals). */
-const SCHEMA = schema
+/** Every migration's statements, in order (none has `;` or `--` inside string literals). */
+const SCHEMA = [ranking, endless]
+  .join(';')
   .replace(/--[^\n]*/g, '')
   .split(';')
   .map((s) => s.trim())
   .filter(Boolean);
 
 /**
- * Runs `query`; if the tables don't exist yet (a fresh database whose
- * migrations were never applied) creates them from the migration file and
- * retries once. Costs nothing once the schema is there.
+ * Runs `query`; if a table doesn't exist yet (a fresh database, or a new
+ * migration nobody applied) creates what's missing from the migration files
+ * — they're idempotent — and retries once. Costs nothing once the schema is there.
  */
 async function withSchema<T>(db: D1Database, query: () => Promise<T>): Promise<T> {
   try {
@@ -23,19 +25,19 @@ async function withSchema<T>(db: D1Database, query: () => Promise<T>): Promise<T
   }
 }
 
-/** Each player's entries, best first (ties go to whoever got there first). */
+/** Each player's runs, best first (ties go to whoever got there first). */
 const BEST = `best AS (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY score DESC, id) AS rn
-  FROM volley_scores
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY points DESC, id) AS rn
+  FROM volley_endless
 )`;
 
 const topStatement = (db: D1Database, limit: number) =>
   db
     .prepare(
       `WITH ${BEST}
-       SELECT name, score, player_points AS player, cpu_points AS cpu, duration_ms AS durationMs, created_at AS at
+       SELECT name, points, duration_ms AS durationMs, created_at AS at
        FROM best WHERE rn = 1
-       ORDER BY score DESC, id
+       ORDER BY points DESC, id
        LIMIT ?1`,
     )
     .bind(limit);
@@ -66,9 +68,7 @@ export interface NewScore {
   matchId: string;
   name: string;
   key: string;
-  score: number;
-  player: number;
-  cpu: number;
+  points: number;
   durationMs: number;
   now: number;
 }
@@ -85,20 +85,19 @@ export async function saveScore(db: D1Database, s: NewScore, limit: number): Pro
       db.batch([
         db
           .prepare(
-            `INSERT INTO volley_scores
-               (match_id, name, name_key, score, player_points, cpu_points, duration_ms, created_at)
-             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+            `INSERT INTO volley_endless (match_id, name, name_key, points, duration_ms, created_at)
+             SELECT ?1, ?2, ?3, ?4, ?5, ?6
              WHERE EXISTS (SELECT 1 FROM volley_matches WHERE id = ?1)
              RETURNING id`,
           )
-          .bind(s.matchId, s.name, s.key, s.score, s.player, s.cpu, s.durationMs, s.now),
+          .bind(s.matchId, s.name, s.key, s.points, s.durationMs, s.now),
         db.prepare('DELETE FROM volley_matches WHERE id = ?1').bind(s.matchId),
         db
           .prepare(
-            `WITH ${BEST}, me AS (SELECT score, id FROM best WHERE rn = 1 AND name_key = ?1)
-             SELECT me.score AS best, me.id AS bestId,
+            `WITH ${BEST}, me AS (SELECT points, id FROM best WHERE rn = 1 AND name_key = ?1)
+             SELECT me.points AS best, me.id AS bestId,
                1 + (SELECT COUNT(*) FROM best b
-                    WHERE b.rn = 1 AND (b.score > me.score OR (b.score = me.score AND b.id < me.id))) AS position
+                    WHERE b.rn = 1 AND (b.points > me.points OR (b.points = me.points AND b.id < me.id))) AS position
              FROM me`,
           )
           .bind(s.key),
@@ -110,7 +109,7 @@ export async function saveScore(db: D1Database, s: NewScore, limit: number): Pro
     const me = standing.results[0] as { best: number; bestId: number; position: number } | undefined;
     if (!entry || !me) return null;
     return {
-      score: s.score,
+      points: s.points,
       best: me.best,
       personalBest: me.bestId === entry.id,
       position: me.position,
