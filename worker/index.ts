@@ -120,7 +120,6 @@ async function submit(request: Request, url: URL, env: Env): Promise<Response> {
   const problem = checkResult(result, gameConfig.winScore);
   if (problem) throw fail(422, problem);
   const score = scoreMatch(result);
-  if (score <= 0) throw fail(422, 'invalid_result');
 
   const db = database(env);
   const startedAt = await store.matchStartedAt(db, body.matchId);

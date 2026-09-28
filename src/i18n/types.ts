@@ -86,7 +86,6 @@ export interface RankingStrings {
   newBest: string;
   /** `{best}` = the player's standing record. */
   keptBest: string;
-  noPoints: string;
   offline: string;
   errors: {
     length: string;

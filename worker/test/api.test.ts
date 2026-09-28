@@ -59,6 +59,13 @@ describe('ranking API', () => {
     expect(body.top).toEqual([{ name: 'Ana Clara', score, player: 7, cpu: 2, durationMs: 95_000, at: Date.now() }]);
   });
 
+  it('saves a 0-point loss too, below everyone who scored', async () => {
+    await play('Bruno', 3, 7, 30_000);
+    const res = await play('Ana', 0, 7, 20_000);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ score: 0, personalBest: true, position: 2 });
+  });
+
   it('refuses bad names without spending the ticket', async () => {
     const id = await kickoff();
     wait(60_000);
@@ -84,7 +91,6 @@ describe('ranking API', () => {
     };
     await expectError(await submit(id, 'Ana', 99, 0, 30_000), 422, 'invalid_result');
     await expectError(await submit(id, 'Ana', 6, 5, 30_000), 422, 'invalid_result');
-    await expectError(await submit(id, 'Ana', 0, 7, 30_000), 422, 'invalid_result'); // worth 0 points
     // Faster than the rules allow…
     await expectError(await submit(id, 'Ana', 7, 0, 7 * RANKING.MIN_MS_PER_POINT - 1), 422, 'too_fast');
     // …or longer than the server has known about the match.

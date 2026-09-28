@@ -167,7 +167,7 @@ Pontuação: 100 por ponto feito, −20 por ponto sofrido, +500 pela vitória e 
 Validação contra trapaça, em camadas:
 
 - **O cliente nunca envia a pontuação.** Envia só o placar e o relógio da partida; o Worker recalcula os pontos.
-- **Placar possível:** exatamente um lado com 7 pontos, inteiros, e nenhum 0 × 7 (vale 0 ponto).
+- **Placar possível:** exatamente um lado com 7 pontos, todos inteiros.
 - **Tempo mínimo por ponto**, derivado das próprias constantes do motor (a bola paira 900 ms no saque e há 1,2 s de
   pausa após cada ponto): 7 × 0 em 5 s é recusado.
 - **Relógio do servidor:** no apito inicial o jogo pede um _ticket_ (UUID aleatório). Na hora de salvar, a duração

@@ -233,7 +233,6 @@ export const en: Dictionary = {
       position: 'You’re #{n}',
       newBest: 'New personal best!',
       keptBest: 'Your record is still {best} points',
-      noPoints: 'No leaderboard points this time. Score more next round!',
       offline: 'The leaderboard is unavailable right now. This match wasn’t recorded.',
       errors: {
         length: 'Use 3 to 16 characters.',

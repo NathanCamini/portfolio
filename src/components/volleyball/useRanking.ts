@@ -22,8 +22,8 @@ export type RankingView =
   | { kind: 'form'; result: MatchResult; score: number; matchId: string; busy: boolean; error: RankingError | null }
   /** Saved: the board with the player's standing. */
   | { kind: 'saved'; result: MatchResult; saved: SubmitResponse }
-  /** Final whistle with nothing to save, or a save the server refused for good. */
-  | { kind: 'final'; result: MatchResult; score: number; message: 'noPoints' | 'offline' | 'rejected' | 'expired' };
+  /** Final whistle with the ranking unreachable, or a save the server refused for good. */
+  | { kind: 'final'; result: MatchResult; score: number; message: 'offline' | 'rejected' | 'expired' };
 
 const NAME_KEY = 'volley-ranking-name';
 
@@ -78,10 +78,7 @@ export function useRanking() {
     const score = scoreMatch(result);
     const pending = ticket.current ?? Promise.resolve(null);
     ticket.current = null;
-    if (score <= 0) {
-      setView({ kind: 'final', result, score, message: 'noPoints' });
-      return;
-    }
+    // Every finished match asks for a name, even a 0-point loss: the board then shows where it landed.
     void pending.then((matchId) =>
       setView(
         matchId

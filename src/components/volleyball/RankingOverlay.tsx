@@ -189,7 +189,7 @@ export function RankingOverlay({ view, strings: R, game, lang, onSave, onEdit, o
           </h3>
           {header(view.result, view.score)}
           <p className={styles.note} role="status">
-            {view.message === 'noPoints' ? R.noPoints : view.message === 'offline' ? R.offline : R.errors[view.message]}
+            {view.message === 'offline' ? R.offline : R.errors[view.message]}
           </p>
           <div className={styles.actions}>
             <button type="button" className="btn btn-primary" data-primary="" onClick={onAgain}>

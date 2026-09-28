@@ -233,7 +233,6 @@ export const pt: Dictionary = {
       position: 'Você está em {n}º lugar',
       newBest: 'Novo recorde pessoal!',
       keptBest: 'Seu recorde continua {best} pontos',
-      noPoints: 'Sem pontos para o ranking desta vez. Faça mais pontos na próxima!',
       offline: 'Ranking indisponível agora. A partida não foi registrada.',
       errors: {
         length: 'Use de 3 a 16 caracteres.',
