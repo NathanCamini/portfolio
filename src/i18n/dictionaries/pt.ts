@@ -256,4 +256,12 @@ export const pt: Dictionary = {
     role: 'Desenvolvedor back-end',
     backToTop: 'Voltar ao topo',
   },
+  incident: {
+    hint: 'o ";" encerrou o DELETE antes do WHERE. Sem WHERE, a tabela inteira foi junto.',
+    lost: 'cadê o site? 😰',
+    relief: 'ufa: ainda estamos dentro do BEGIN.',
+    lesson: 'lição do dia: sempre BEGIN; antes de um DELETE.',
+    skip: 'pular',
+    announce: 'Easter egg: a query do adesivo apagou o site, e um ROLLBACK trouxe tudo de volta.',
+  },
 };

@@ -83,6 +83,7 @@ src/
    │  ├─ CarRigController.ts # lógica scroll × rotação (TS puro, testado)
    │  ├─ useDragRotation.ts  # ponteiro/teclado → intenção de rotação
    │  └─ porsche911/         # modelo procedural: body (loft), wheel, details, materials
+   ├─ incident/              # easter egg do sticker DELETE: roteiro psql (TS puro, testado) + glitch
    ├─ siege/                 # Peek Trainer: engine (TS puro, testado), render, componente
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
@@ -111,6 +112,14 @@ causam nenhum re-render do React (Motion values e refs lidos no `useFrame`).
 **Mini-jogo.** Motor puro em TypeScript com **passo fixo de 120 Hz** (física idêntica em telas de 60/120/144 Hz,
 sem a bola atravessar a rede), IA que prevê o ponto de queda, quadra lógica 960×540 com letterbox. O teclado só é
 capturado com o painel visível. Tela cheia pela Fullscreen API; controles touch em telas `pointer: coarse`.
+
+**Easter egg: `DELETE` sem `WHERE`.** O sticker `DELETE * from USERS; WHERE …` do hero executa a query: cada bloco
+da página (navbar + filhos de `<main>`) some com glitch e a tela "desliga" como um CRT; no centro, uma sessão `psql`
+repete a query com seus erros (`ERROR: syntax error at or near "WHERE"`, transação abortada) e digita `ROLLBACK;` —
+cada linha do log traz um bloco de volta. Nada é desmontado: os blocos só ficam ocultos via Web Animations API
+(`cancel()` devolve o DOM intacto), então scroll, carro e partida continuam onde estavam. A sessão inteira é uma
+timeline pura (`frameAt(timeline, t)`), coberta por testes; `Esc` pula, e `prefers-reduced-motion` troca o glitch
+por um fade.
 
 **i18n.** `/pt` e `/en` são pré-renderizados (SEO + hreflang; `x-default` aponta para `/`, que detecta o idioma
 do sistema). A troca de idioma é estado no cliente + `history.replaceState`: o texto muda na hora e **nada remonta**

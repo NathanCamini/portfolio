@@ -256,4 +256,12 @@ export const en: Dictionary = {
     role: 'Back-end developer',
     backToTop: 'Back to top',
   },
+  incident: {
+    hint: 'the ";" ended the DELETE before the WHERE. No WHERE means the whole table.',
+    lost: 'where did the site go? 😰',
+    relief: 'phew: we are still inside the BEGIN.',
+    lesson: 'lesson of the day: always BEGIN; before a DELETE.',
+    skip: 'skip',
+    announce: 'Easter egg: the sticker’s query deleted the site, and a ROLLBACK brought it all back.',
+  },
 };
