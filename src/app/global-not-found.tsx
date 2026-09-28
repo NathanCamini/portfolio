@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { CloudflareAnalytics } from '@/components/CloudflareAnalytics';
 import { site } from '@/config/site';
 import { inter } from './fonts';
 import styles from './global-not-found.module.css';
@@ -36,6 +37,8 @@ export default function GlobalNotFound() {
             </Link>
           </nav>
         </main>
+        {/* 404 hits show up in analytics too: a quick way to spot broken links. */}
+        <CloudflareAnalytics />
       </body>
     </html>
   );
