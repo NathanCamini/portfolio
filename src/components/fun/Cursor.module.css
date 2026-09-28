@@ -1,0 +1,14 @@
+.ring {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-accent-300);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  pointer-events: none;
+  mix-blend-mode: screen;
+}

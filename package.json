@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "preview": "next build && wrangler dev",
+    "deploy": "next build && wrangler deploy",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
@@ -14,6 +15,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.1",
+    "canvas-confetti": "^1.9.4",
     "motion": "^13.4.4",
     "next": "16.3.6",
     "react": "19.2.8",
@@ -21,6 +23,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -29,7 +32,8 @@
     "eslint-config-next": "16.3.6",
     "prettier": "^3.9.9",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "^4.142.0"
   },
   "engines": {
     "node": ">=20.9"

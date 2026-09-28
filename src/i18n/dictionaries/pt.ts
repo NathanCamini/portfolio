@@ -1,29 +1,43 @@
 import type { Dictionary } from '../types';
 
 /**
- * Português (padrão). Os trechos entre [colchetes] são placeholders do design:
- * troque pelos seus dados reais (curso, universidade, anos…).
+ * Português. Os trechos entre [colchetes] são placeholders: troque pelos seus
+ * dados reais (curso, universidade, anos…). Os projetos são exemplos de
+ * trabalho back-end — substitua pelos seus.
  */
 export const pt: Dictionary = {
   meta: {
-    title: 'Nathan Camini — Front-end & UX criativa',
+    title: 'Nathan Camini — Desenvolvedor back-end',
     description:
-      'Portfólio de Nathan Camini: desenvolvedor front-end, graduado e pós-graduando. Projetos, experimentos com IA, um 911 em Three.js e um mini-jogo de vôlei de praia.',
+      'Portfólio de Nathan Camini: desenvolvedor back-end, graduado e pós-graduando. APIs, sistemas distribuídos, experimentos com IA, um 911 GT3 RS em 3D e dois mini-jogos.',
   },
   nav: { bio: 'Biografia', projects: 'Projetos', hobbies: 'Hobbies', contact: 'Contato', language: 'Idioma' },
   hero: {
-    tag1: 'Front-end · UX criativa',
+    tag1: 'Back-end · APIs & sistemas',
     tag2: 'Pós-graduando',
-    title: 'Construo interfaces que se comportam como experimentos.',
-    sub: 'Desenvolvedor front-end graduado em [Curso] e pós-graduando em [Área]. Este site é meu playground: role a página, arraste o carro, jogue uma partida.',
+    titleLead: 'Construo sistemas que',
+    titleWords: ['aguentam o tranco.', 'escalam sem drama.', 'não caem às 3h da manhã.', 'fazem o front sorrir.'],
+    sub: 'Desenvolvedor back-end graduado em [Curso] e pós-graduando em [Área]. No dia a dia: APIs, filas e bancos de dados. Aqui, o playground: role a página, arraste o carro, jogue uma partida.',
     cta1: 'Ver projetos',
     cta2: 'Jogar vôlei',
     scrollHint: 'Role para explorar',
   },
+  marquee: [
+    'APIs REST',
+    'Mensageria',
+    'Bancos de dados',
+    'Observabilidade',
+    'Cloud',
+    'Testes',
+    'Porsche 911',
+    'Vôlei de praia',
+    'Rainbow Six Siege',
+    'IA',
+  ],
   bio: {
     label: '01 — Biografia',
     title: 'Da curiosidade por como as coisas funcionam ao código que as faz funcionar.',
-    p1: '[Conte aqui como começou: o primeiro contato com programação, o que o levou ao front-end e o tipo de problema que gosta de resolver.]',
+    p1: '[Conte aqui como começou: o primeiro contato com programação, o que o levou ao back-end e o tipo de problema que gosta de resolver — performance, integrações, dados.]',
     p2: '[Descreva a graduação concluída, o foco da pós-graduação atual e como a pesquisa acadêmica aparece no seu trabalho do dia a dia.]',
     eduLabel: 'Formação acadêmica',
     edu: [
@@ -56,26 +70,26 @@ export const pt: Dictionary = {
     past: [
       {
         year: '2025',
-        type: 'Web app',
-        title: 'Painel de dados em tempo real',
-        body: 'Dashboard com gráficos ao vivo, filtros compostos e modo offline para uma equipe de operações.',
-        stack: ['React', 'TypeScript', 'WebSocket'],
+        type: 'API',
+        title: 'Plataforma de pagamentos',
+        body: 'API idempotente com filas, retries e conciliação automática, processando milhares de transações por minuto.',
+        stack: ['Node.js', 'PostgreSQL', 'RabbitMQ'],
         href: '#',
       },
       {
         year: '2024',
-        type: 'Design system',
-        title: 'Biblioteca de componentes',
-        body: 'Tokens, componentes acessíveis e documentação interativa usados por três produtos.',
-        stack: ['React', 'Storybook', 'CSS vars'],
+        type: 'Infra',
+        title: 'Observabilidade de microsserviços',
+        body: 'Métricas, traces e alertas padronizados para 20+ serviços — o tempo para achar um incidente caiu pela metade.',
+        stack: ['Docker', 'Kubernetes', 'Grafana'],
         href: '#',
       },
       {
         year: '2023',
-        type: 'Experimento',
-        title: 'Visualizador 3D de produtos',
-        body: 'Configurador em WebGL com troca de materiais e captura de imagem direto do navegador.',
-        stack: ['Three.js', 'GLSL', 'Vite'],
+        type: 'Integração',
+        title: 'Hub de integrações',
+        body: 'Serviço que conecta ERPs e parceiros por webhooks, com fila de reprocessamento e painel de auditoria.',
+        stack: ['Python', 'FastAPI', 'Redis'],
         href: '#',
       },
     ],
@@ -83,21 +97,21 @@ export const pt: Dictionary = {
       {
         n: 'Ideia 01',
         title: 'Tutor de estudos com IA',
-        body: 'Um assistente que transforma artigos da pós em flashcards e perguntas de revisão espaçada.',
+        body: 'Um serviço que transforma artigos da pós em flashcards e perguntas de revisão espaçada.',
         stage: 'Prototipando',
         pct: 45,
       },
       {
         n: 'Ideia 02',
-        title: 'Telemetria automotiva em 3D',
-        body: 'Reproduzir voltas de track day a partir de dados de GPS e acelerômetro, com o carro em Three.js.',
+        title: 'Telemetria automotiva',
+        body: 'Pipeline que ingere GPS e acelerômetro de track days e reproduz as voltas com o carro em 3D.',
         stage: 'Pesquisando',
         pct: 20,
       },
       {
         n: 'Ideia 03',
-        title: 'Placar inteligente de vôlei',
-        body: 'App de placar por voz para partidas na praia, com estatísticas de rally ao final do jogo.',
+        title: 'Stats de Rainbow Six',
+        body: 'API que agrega partidas e mostra evolução por operador, mapa e site — com alertas de tilt.',
         stage: 'Esboço',
         pct: 10,
       },
@@ -105,12 +119,12 @@ export const pt: Dictionary = {
   },
   hobbies: {
     label: '03 — Hobbies',
-    title: 'Três coisas que ocupam o tempo livre e acabam virando código.',
+    title: 'Quatro coisas que ocupam o tempo livre e acabam virando código.',
   },
   ai: {
     label: '03a — Inteligência Artificial',
     title: 'A IA como parceira de rascunho.',
-    body: 'Uso modelos de linguagem para gerar ideias em quantidade, prototipar rápido e revisar código. A decisão final e a escrita que vai para produção continuam sendo minhas.',
+    body: 'Uso modelos de linguagem para gerar ideias em quantidade, prototipar rápido e revisar código. A decisão final e o que vai para produção continuam sendo meus.',
     promptLabel: 'Prompt',
     resultLabel: 'Resultado',
     flows: [
@@ -126,19 +140,19 @@ export const pt: Dictionary = {
       },
       {
         label: 'Revisão',
-        prompt: 'Revise este hook React: existem re-renders desnecessários ou listeners que não são removidos?',
-        result: '→ 2 problemas reais · 1 falso positivo descartado',
+        prompt: 'Revise esta query: existe N+1, falta índice ou dá para paginar por cursor?',
+        result: '→ 1 N+1 real · 1 índice composto · p95 caiu de 900 para 120 ms',
       },
     ],
   },
   car: {
     label: '03b — Carros',
-    title: 'Um 911 que anda com o scroll.',
+    title: 'Um 911 GT3 RS que anda com o scroll.',
     body: 'A posição horizontal vem da rolagem da página. A rotação vem do seu mouse. São dois grupos 3D separados, então um nunca interfere no outro.',
     hint: 'Arraste para girar · duplo clique para resetar',
     loading: 'Carregando Three.js…',
     error: 'Não foi possível carregar o WebGL.',
-    canvasLabel: 'Porsche 911 em 3D. Role a página para movê-lo e arraste para girá-lo.',
+    canvasLabel: 'Porsche 911 GT3 RS em 3D. Role a página para movê-lo e arraste para girá-lo.',
   },
   volleyball: {
     label: '03c — Vôlei de praia',
@@ -154,6 +168,10 @@ export const pt: Dictionary = {
     right: 'Mover para a direita',
     controls: '← → ou A D para mover · ↑ W ou espaço para pular',
     canvasLabel: 'Mini-jogo de vôlei de praia',
+    badge: 'Mini-jogo jogável',
+    play: 'Jogar agora',
+    fab: 'Jogar vôlei',
+    teaserAlt: 'Animação: dois jogadores trocando a bola por cima da rede na praia, à noite.',
     game: {
       title: 'Beach Volley',
       start: 'Clique ou aperte espaço para começar',
@@ -166,9 +184,44 @@ export const pt: Dictionary = {
       again: 'Clique ou espaço para jogar de novo',
     },
   },
+  games: {
+    label: '03d — Games',
+    title: 'Rainbow Six Siege: onde paciência vale mais que reflexo.',
+    body: 'É o jogo que mais jogo. Gosto do lado tático — informação, utilitário, ângulos — e de como uma parede destrutível muda a rodada inteira. Parece arquitetura de sistemas: quem entende o mapa ganha.',
+    mainLabel: 'Mains',
+    mains: [
+      { name: 'Ataque', role: 'Hard breacher' },
+      { name: 'Defesa', role: 'Âncora no site' },
+    ],
+    facts: [
+      { value: '5v5', label: 'tático' },
+      { value: '1 vida', label: 'por rodada' },
+      { value: '∞', label: 'drones perdidos' },
+    ],
+    trainerTitle: 'Peek Trainer',
+    trainerBody:
+      'Inimigos aparecem nas janelas e portas por um instante. Cabeça vale mais, refém tira pontos. 30 segundos para subir de Copper a Champion.',
+    controls: 'Clique ou toque para atirar · não acerte os reféns',
+    canvasLabel: 'Mini-jogo de mira no estilo tático',
+    trainer: {
+      title: 'Peek Trainer',
+      start: 'Clique para iniciar a rodada',
+      score: 'PONTOS',
+      time: 'TEMPO',
+      streak: 'SEQUÊNCIA',
+      headshot: 'HEADSHOT',
+      hostage: 'REFÉM!',
+      rank: 'Seu rank',
+      best: 'Recorde',
+      again: 'Clique para jogar de novo',
+    },
+  },
   contact: {
     label: '04 — Contato',
-    title: 'Tem um projeto estranho o suficiente? Vamos conversar.',
-    footNote: 'Feito com React, Three.js e muita areia.',
+    title: 'Tem um sistema para escalar ou um bug estranho o suficiente? Vamos conversar.',
+  },
+  footer: {
+    role: 'Desenvolvedor back-end',
+    backToTop: 'Voltar ao topo',
   },
 };

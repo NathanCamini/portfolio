@@ -32,7 +32,7 @@ export interface RigFrame {
  *   scene
  *    └ track   ← ONLY scroll writes here      (position.x)
  *       └ spin ← ONLY the pointer writes here (rotation.x / rotation.y)
- *          └ 911 (chassis squats, wheels roll, wing deploys — all derived from track motion)
+ *          └ 911 (chassis squats, wheels roll, DRS opens — all derived from track motion)
  *
  * Transforms compose parent → child, so rotating `spin` can never move the car
  * off its scroll trajectory, and scrolling can never reset the user's rotation.
@@ -94,11 +94,10 @@ export class CarRigController {
     this.velocity = v;
     this.pitch = MathUtils.damp(this.pitch, MathUtils.clamp(accel * 0.0016, -0.035, 0.035), 6, delta);
     car.chassis.rotation.z = this.pitch;
-    //    …and the active rear wing deploys above "speed", like the real car's.
+    //    …and the rear wing's DRS flap opens above "speed", like on track.
     const wingTarget = Math.abs(v) > 1.2 ? 1 : 0;
     this.wing = MathUtils.damp(this.wing, wingTarget, 3, delta);
-    car.spoiler.position.y = car.spoilerRestY + this.wing * 0.075;
-    car.spoiler.rotation.z = car.spoilerRestTilt - this.wing * 0.12; // deployed: trailing edge up
+    car.setDrs(this.wing);
 
     // 4) USER rotation, applied to the child group only (with release inertia).
     if (!rotation.dragging && Math.abs(rotation.velocity) > 1e-5) {

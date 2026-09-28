@@ -1,0 +1,22 @@
+.slot {
+  display: block;
+  /* Reserve two lines so the page below never jumps as words change length. */
+  min-height: 2em;
+  perspective: 600px;
+}
+
+.word {
+  display: inline;
+  color: var(--color-accent-300);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.chunk {
+  display: inline-block;
+  white-space: pre;
+}
+
+.char {
+  display: inline-block;
+  transform-origin: 50% 80%;
+}

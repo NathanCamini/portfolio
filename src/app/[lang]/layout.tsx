@@ -1,18 +1,11 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { Providers } from '@/components/Providers';
 import { site } from '@/config/site';
 import { htmlLang, isLocale, locales } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
+import { inter } from '../fonts';
 import '../globals.css';
-
-const inter = Inter({
-  subsets: ['latin', 'latin-ext'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
-  display: 'swap',
-});
 
 // Pre-render /pt and /en at build time; any other first segment is a 404.
 export const dynamicParams = false;
@@ -31,7 +24,8 @@ export async function generateMetadata({ params }: LayoutProps<'/[lang]'>): Prom
     authors: [{ name: site.name }],
     alternates: {
       canonical: `/${lang}`,
-      languages: { 'pt-BR': '/pt', en: '/en', 'x-default': '/pt' },
+      // x-default → `/`, which picks the language from the visitor's system settings.
+      languages: { 'pt-BR': '/pt', en: '/en', 'x-default': '/' },
     },
     openGraph: {
       type: 'website',

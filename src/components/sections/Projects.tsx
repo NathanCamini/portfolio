@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, type Variants } from 'motion/react';
 import { EASE_OUT_SOFT } from '@/components/motion/easing';
+import { Tilt } from '@/components/fun/Tilt';
 import { Reveal } from '@/components/motion/Reveal';
 import { ArrowUpRight } from '@/components/ui/icons';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -75,51 +76,55 @@ export function Projects() {
         {tab === 'past'
           ? p.past.map((item) => (
               <motion.div key={item.title} variants={card}>
-                <article className={`card ${styles.card}`}>
-                  <div className="card-kicker">
-                    {item.year} · {item.type}
-                  </div>
-                  <h3 className="card-title">{item.title}</h3>
-                  <p className="card-body">{item.body}</p>
-                  <ul className={styles.stack} aria-label="Stack">
-                    {item.stack.map((s) => (
-                      <li key={s} className="tag tag-neutral">
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
-                  {item.href && (
-                    <a className={`btn btn-ghost ${styles.caseLink}`} href={item.href}>
-                      {p.caseLabel}
-                      <ArrowUpRight size={14} />
-                    </a>
-                  )}
-                </article>
+                <Tilt>
+                  <article className={`card ${styles.card}`}>
+                    <div className="card-kicker">
+                      {item.year} · {item.type}
+                    </div>
+                    <h3 className="card-title">{item.title}</h3>
+                    <p className="card-body">{item.body}</p>
+                    <ul className={styles.stack} aria-label="Stack">
+                      {item.stack.map((s) => (
+                        <li key={s} className="tag tag-neutral">
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                    {item.href && (
+                      <a className={`btn btn-ghost ${styles.caseLink}`} href={item.href}>
+                        {p.caseLabel}
+                        <ArrowUpRight size={14} />
+                      </a>
+                    )}
+                  </article>
+                </Tilt>
               </motion.div>
             ))
           : p.future.map((item) => (
               <motion.div key={item.title} variants={card}>
-                <article className={`card ${styles.card} ${styles.future}`}>
-                  <div className="card-kicker">{item.n}</div>
-                  <h3 className="card-title">{item.title}</h3>
-                  <p className="card-body">{item.body}</p>
-                  <div className={styles.stage}>
-                    <div className={styles.stageRow}>
-                      <span>{p.stageLabel}</span>
-                      <span className={styles.stageValue}>{item.stage}</span>
+                <Tilt>
+                  <article className={`card ${styles.card} ${styles.future}`}>
+                    <div className="card-kicker">{item.n}</div>
+                    <h3 className="card-title">{item.title}</h3>
+                    <p className="card-body">{item.body}</p>
+                    <div className={styles.stage}>
+                      <div className={styles.stageRow}>
+                        <span>{p.stageLabel}</span>
+                        <span className={styles.stageValue}>{item.stage}</span>
+                      </div>
+                      <div
+                        className={styles.bar}
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={item.pct}
+                        aria-label={`${p.stageLabel}: ${item.stage}`}
+                      >
+                        <div className={styles.barFill} style={{ width: `${item.pct}%` }} />
+                      </div>
                     </div>
-                    <div
-                      className={styles.bar}
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={item.pct}
-                      aria-label={`${p.stageLabel}: ${item.stage}`}
-                    >
-                      <div className={styles.barFill} style={{ width: `${item.pct}%` }} />
-                    </div>
-                  </div>
-                </article>
+                  </article>
+                </Tilt>
               </motion.div>
             ))}
       </motion.div>

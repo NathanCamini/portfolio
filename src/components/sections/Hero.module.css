@@ -37,7 +37,7 @@
 
 .title {
   margin: 0;
-  max-width: 16ch;
+  max-width: 17ch;
   font-weight: 500;
   font-size: clamp(40px, 7vw, 92px);
   line-height: 1;
@@ -70,4 +70,41 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-neutral-500);
+}
+
+.tokens {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tokenWrap {
+  position: absolute;
+}
+
+.token {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--color-accent-200);
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.emoji {
+  display: inline-block;
+  font-size: 34px;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
+}
+
+/* Stickers sit to the right of the headline; on narrow screens they would cover it. */
+@media (max-width: 900px) {
+  .tokens {
+    display: none;
+  }
 }
