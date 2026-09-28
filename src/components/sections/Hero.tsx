@@ -43,7 +43,8 @@ const TOKENS: Token[] = [
   {
     text: `${DELETE_QUERY} 🫢`,
     x: '47%',
-    y: '9%',
+    // Low enough to clear the fixed navbar (64px) even with parallax + float pulling it up.
+    y: '13%',
     depth: 30,
     float: 6,
     tone: 'danger',
@@ -85,16 +86,18 @@ function FloatingToken({
     token.wide ? styles.wide : '',
     token.onClick ? styles.clickable : '',
   ].join(' ');
+  // Idle tilt. The long clickable sticker barely tilts, so its ends stay where the cursor aims.
+  const tilt = token.onClick ? 1 : 4;
   const sticker = {
     className,
-    // Poke a sticker and it wobbles.
-    whileHover: {
-      scale: 1.15,
-      rotate: index % 2 ? -8 : 8,
-      transition: { type: 'spring', stiffness: 400, damping: 10 },
-    },
+    // Poke a sticker and it wobbles. The clickable one settles instead (straight, still, a bit
+    // bigger, so it reads as a button): it is ~430px long, and a tilt would swing its ends (the word
+    // DELETE) out from under the cursor, un-hover it, swing back… shaking in a loop.
+    whileHover: token.onClick
+      ? { scale: 1.05, rotate: 0, y: 0, transition: { type: 'spring', stiffness: 300, damping: 28 } }
+      : { scale: 1.15, rotate: index % 2 ? -8 : 8, transition: { type: 'spring', stiffness: 400, damping: 10 } },
     initial: { opacity: 0, scale: 0.6 },
-    animate: { opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? 4 : -4, 0] },
+    animate: { opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? tilt : -tilt, 0] },
     transition: {
       opacity: { delay: 0.8 + index * 0.08, duration: 0.6 },
       scale: { delay: 0.8 + index * 0.08, duration: 0.6 },
@@ -109,8 +112,10 @@ function FloatingToken({
       style={{ left: token.x, top: token.y, x, y }}
     >
       {token.onClick ? (
-        // Mouse-only surprise inside an aria-hidden layer: kept out of the tab order.
-        <motion.button {...sticker} type="button" tabIndex={-1} onClick={token.onClick} whileTap={{ scale: 0.9 }} />
+        // Mouse-only surprise inside an aria-hidden layer: kept out of the tab order. No press
+        // animation on purpose: shrinking it on mousedown could slide it out from under the
+        // cursor before mouseup, and then the browser never fires the click.
+        <motion.button {...sticker} type="button" tabIndex={-1} onClick={token.onClick} />
       ) : (
         <motion.span {...sticker} />
       )}

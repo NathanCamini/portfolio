@@ -150,6 +150,16 @@
   line-height: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+  transition: filter 0.15s;
+}
+
+/* Press feedback without moving it (see Hero.tsx). */
+.clickable:hover {
+  filter: brightness(1.15);
+}
+
+.clickable:active {
+  filter: brightness(1.5);
 }
 
 /* Long stickers need room: hidden until the viewport is wide enough. */
