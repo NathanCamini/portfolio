@@ -7,7 +7,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import styles from './Bio.module.css';
 
 /**
- * 01 — Bio: narrative on the left, education cards on the right, then a
+ * Bio: narrative on the left, education cards on the right, then a
  * work-experience timeline whose rail fills in as it scrolls past.
  */
 export function Bio() {
@@ -19,7 +19,7 @@ export function Bio() {
 
   return (
     <section id="bio" className="section">
-      <Reveal className="eyebrow">{bio.label}</Reveal>
+      <Reveal className="eyebrow path">{bio.label}</Reveal>
 
       <div className={styles.grid}>
         <div>

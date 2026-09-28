@@ -31,7 +31,7 @@ export const pt: Dictionary = {
     'IA',
   ],
   bio: {
-    label: '01 — Biografia',
+    label: 'Biografia',
     title: 'Da curiosidade por como as coisas funcionam ao código que as faz funcionar.',
     p1: 'Comecei na informática do 6º Batalhão de Comunicações do Exército, cuidando de rede, telefonia e computadores. De lá fui para Análise e Desenvolvimento de Sistemas no IFRS, estagiei desenvolvendo um ERP ainda em validação — lado a lado com o cliente — e passei quase dois anos em vendas industriais, onde aprendi a negociar e a entender o que o cliente realmente precisa.',
     p2: 'Hoje sou desenvolvedor de software na Tramontina: mantenho sistemas legados em Genero, adaptei o sistema para a reforma tributária e crio aplicações novas com .NET/C# e Next.js. Em paralelo, faço pós em Engenharia de IA e MLOps na PUC Minas, estudando como levar modelos do notebook para produção.',
@@ -96,7 +96,7 @@ export const pt: Dictionary = {
     ],
   },
   projects: {
-    label: '02 — Projetos',
+    label: 'Projetos',
     title: 'O que já foi entregue e o que ainda está no caderno.',
     tabPast: 'Portfólio',
     tabFuture: 'Ideias futuras',
@@ -150,11 +150,11 @@ export const pt: Dictionary = {
     ],
   },
   hobbies: {
-    label: '03 — Hobbies',
+    label: 'Hobbies',
     title: 'Quatro coisas que ocupam o tempo livre e acabam virando código.',
   },
   ai: {
-    label: '03a — Inteligência Artificial',
+    label: 'Inteligência Artificial',
     title: 'A IA como parceira de rascunho.',
     body: 'Uso modelos de linguagem para gerar ideias em quantidade, prototipar rápido e revisar código. A decisão final e o que vai para produção continuam sendo meus.',
     promptLabel: 'Prompt',
@@ -178,7 +178,7 @@ export const pt: Dictionary = {
     ],
   },
   car: {
-    label: '03b — Carros',
+    label: 'Carros',
     title: 'Um 911 GT3 RS que anda com o scroll.',
     body: 'A posição horizontal vem da rolagem da página. A rotação vem do seu mouse. São dois grupos 3D separados, então um nunca interfere no outro.',
     hint: 'Arraste para girar · duplo clique para resetar',
@@ -187,7 +187,7 @@ export const pt: Dictionary = {
     canvasLabel: 'Porsche 911 GT3 RS em 3D. Role a página para movê-lo e arraste para girá-lo.',
   },
   volleyball: {
-    label: '03c — Vôlei de praia',
+    label: 'Vôlei de praia',
     title: 'Uma partida rápida na areia?',
     body: 'Mini-jogo 1 contra 1 contra o computador. Primeiro a 7 pontos vence.',
     open: 'Abrir mini-jogo',
@@ -217,7 +217,7 @@ export const pt: Dictionary = {
     },
   },
   games: {
-    label: '03d — Games',
+    label: 'Games',
     title: 'Rainbow Six Siege: onde paciência vale mais que reflexo.',
     body: 'É o jogo que mais jogo. Gosto do lado tático — informação, utilitário, ângulos — e de como uma parede destrutível muda a rodada inteira. Parece arquitetura de sistemas: quem entende o mapa ganha.',
     mainLabel: 'Mains',
@@ -249,7 +249,7 @@ export const pt: Dictionary = {
     },
   },
   contact: {
-    label: '04 — Contato',
+    label: 'Contato',
     title: 'Tem um sistema para escalar ou um bug estranho o suficiente? Vamos conversar.',
   },
   footer: {
