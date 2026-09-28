@@ -69,7 +69,7 @@ export function CarShowcase() {
               {status === 'error' && <span className={styles.muted}>{t.car.error}</span>}
             </div>
             <code ref={readoutRef} className={styles.readout} aria-hidden="true">
-              scroll 0% → track.x 0.00m · spin.y -18°
+              scroll 0% → track.x 0.00m · spin.y 0°
             </code>
           </div>
         </div>

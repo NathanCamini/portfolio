@@ -9,8 +9,11 @@ export interface RotationState {
   dragging: boolean;
 }
 
-/** Resting pose from the design: a slight three-quarter front view. */
-export const REST_YAW = -0.32;
-export const REST_PITCH = 0.05;
+/**
+ * Resting pose: a straight side view, nose pointing along the road (+x, the
+ * direction scrolling drives it). Dragging still turns it; double-click resets here.
+ */
+export const REST_YAW = 0;
+export const REST_PITCH = 0;
 export const PITCH_MIN = -0.2;
 export const PITCH_MAX = 0.55;
