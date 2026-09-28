@@ -62,11 +62,16 @@ export interface CpuProfile {
   spike: number;
 }
 
+/**
+ * Tuned against a human-like player (engine/bot.ts `HUMAN`: 250 ms reactions)
+ * over 500 seeded matches each: it wins ~98% of phase 1, ~60% against the
+ * boss, and ~50% against the original CPU.
+ */
 export const CPU = {
-  /** Phase 1: slower, softer, and misjudges a third of the balls. */
-  easy: { speed: 4.4, jump: -12, jumpChance: 0.06, offset: 16, misreadChance: 0.22, misread: 70, radius: 44, spike: 0 },
+  /** Phase 1: slower and softer, and misjudges one ball in eight. */
+  easy: { speed: 4.4, jump: -12, jumpChance: 0.06, offset: 16, misreadChance: 0.12, misread: 70, radius: 44, spike: 0 },
   /** The original opponent, kept exactly as it was: Endless is played against it. */
   normal: { speed: 5.4, jump: -12.5, jumpChance: 0.08, offset: 16, misreadChance: 0, misread: 0, radius: 44, spike: 0 },
-  /** Phase 2, the boss: bigger, much faster, jumps early and spikes every ball; misjudges only rarely. */
-  boss: { speed: 9, jump: -14, jumpChance: 0.3, offset: 22, misreadChance: 0.06, misread: 70, radius: 54, spike: 3 },
+  /** Phase 2, the bug: bigger, quick, jumps early and spikes every ball, but glitches on one ball in seven. */
+  boss: { speed: 6, jump: -14, jumpChance: 0.15, offset: 22, misreadChance: 0.15, misread: 70, radius: 52, spike: 2 },
 } satisfies Record<string, CpuProfile>;

@@ -3,7 +3,7 @@ import { CPU, type CpuProfile } from './constants';
 
 /**
  * The two ways to play. Campaign: phase 1 (an easy CPU on the beach), then
- * the boss (an almost unbeatable one in a red arena); win a phase to move
+ * the boss (a bug in production, in a red-alert arena); win a phase to move
  * on, lose it and you play it again. Endless: the original CPU, no limit
  * for the player, over when the CPU reaches its score — the only mode that
  * goes on the leaderboard.
@@ -17,7 +17,7 @@ export interface Stage {
   cpu: CpuProfile;
   /** Points that end the match, for [player, cpu]. Infinity: no limit. */
   limits: [number, number];
-  theme: 'beach' | 'inferno';
+  theme: 'beach' | 'bug';
 }
 
 export const STAGES: Record<StageId, Stage> = {
@@ -33,7 +33,7 @@ export const STAGES: Record<StageId, Stage> = {
     mode: 'campaign',
     cpu: CPU.boss,
     limits: [gameConfig.phaseWinScore, gameConfig.phaseWinScore],
-    theme: 'inferno',
+    theme: 'bug',
   },
   endless: {
     id: 'endless',

@@ -161,14 +161,18 @@ sem a bola atravessar a rede), IA que prevê o ponto de queda, quadra lógica 96
 capturado com o painel visível. Tela cheia pela Fullscreen API; controles touch em telas `pointer: coarse`.
 
 **Modos.** A **campanha** tem duas fases de 7 pontos: a fase 1, na praia, contra uma CPU mais lenta que erra a
-leitura de parte das bolas; e a fase 2, contra o **Endiabrado** — maior, muito mais rápido, que pula cedo e crava
-toda bola — numa arena vermelha (céu em brasa, lua de sangue, lava, brasas subindo, vinheta pulsando, tela tremendo
-a cada ponto dele). Só chega ao chefe quem vence a fase 1; quem perde repete a fase em que está, e o progresso fica
-salvo no navegador. O **endless** é à parte: a CPU original, sem limite de pontos para o jogador, e acaba quando a
-CPU chega a 7 — é o único modo que vale ranking. A dificuldade é medida, não chutada: um bot que joga como a CPU
-original (espelhado para o lado do jogador) enfrenta cada perfil em partidas com sementes fixas. Contra ele, a fase
-1 perde todas, a CPU do endless perde 76% (idêntica à original, ponto a ponto nas mesmas sementes) e o chefe vence
-97%. Os testes travam essa ordem (`engine/physics.test.ts`).
+leitura de parte das bolas; e a fase 2, o chefe: um **bug em produção** — uma joaninha maior e rápida, que pula cedo
+e corta toda bola, mas que "buga" (lê errado uma bola em sete e glitcha na tela, em ciano e magenta) — numa arena
+em alerta vermelho (luz de alarme, pixels corrompidos subindo, vinheta pulsando, tela tremendo a cada ponto dele).
+Só chega ao chefe quem vence a fase 1; quem perde repete a fase em que está, e o progresso fica salvo no navegador.
+O **endless** é à parte: a CPU original, sem limite de pontos para o jogador, e acaba quando a CPU chega a 7 — é o
+único modo que vale ranking.
+
+**Dificuldade medida, não chutada.** `engine/bot.ts` tem um jogador simulado com limites humanos: relê a bola a cada
+250 ms (tempo de reação médio) e erra mais a previsão quanto mais longe a bola está. Ele enfrenta cada perfil em 500
+partidas com sementes fixas: vence **~98%** da fase 1, **~60%** contra o bug e **~50%** contra a CPU original do
+endless (que ficou idêntica: dá o mesmo resultado, ponto a ponto, que o motor antigo nas mesmas sementes). Os testes
+travam essas faixas (`engine/physics.test.ts`).
 
 **Ranking global.** Três endpoints num Worker (`GET /api/volley/ranking`, `POST /api/volley/matches`,
 `POST /api/volley/scores`) sobre um D1. Vale quantos pontos você faz no endless antes de a CPU chegar a 7. O top 10

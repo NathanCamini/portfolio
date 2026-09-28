@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { botInput } from '../engine/bot';
+import { HUMAN, playerBot } from '../engine/bot';
 import { TIMING } from '../engine/constants';
 import { createGame, primaryAction, stepGame } from '../engine/physics';
 import { checkResult, RANKING } from './match';
@@ -32,8 +32,8 @@ describe('endless run plausibility', () => {
     const g = createGame('endless', seeded(3));
     primaryAction(g);
     const rng = seeded(4);
-    const bot = seeded(5);
-    while (g.phase !== 'over') stepGame(g, TIMING.STEP, botInput(g, TIMING.STEP * 60, bot), rng);
+    const bot = playerBot(HUMAN, seeded(5));
+    while (g.phase !== 'over') stepGame(g, TIMING.STEP, bot(g, TIMING.STEP * 60), rng);
     expect(g.score[1]).toBe(7);
     expect(checkResult({ points: g.score[0], durationMs: Math.round(g.matchTime) }, 7)).toBeNull();
   });
