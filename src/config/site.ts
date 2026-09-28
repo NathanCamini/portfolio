@@ -9,7 +9,7 @@ export const site = {
   email: 'voce@email.com',
   links: {
     github: 'https://github.com/NathanCamini',
-    linkedin: '#',
+    linkedin: 'https://www.linkedin.com/in/nathancamini/',
   },
 } as const;
 
