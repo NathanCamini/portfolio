@@ -1,29 +1,32 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { fetchTop, openMatch, submitScore } from './ranking/api';
-import { type ApiErrorBody, type EndlessResult, type LeaderboardEntry, type SubmitResponse } from './ranking/match';
-import { checkNickname, type NameProblem } from './ranking/nickname';
+import type { ApiErrorBody, GameId, LeaderboardEntry, SubmitResponse } from '@/lib/ranking/contract';
+import { checkNickname, type NameProblem } from '@/lib/ranking/nickname';
+import type { GameResults } from '@/lib/ranking/rules';
+import { fetchTop, openMatch, submitScore } from './api';
 
 /** Everything the overlay can tell the player went wrong (keys of `RankingStrings.errors`). */
 export type RankingError = NameProblem | 'rejected' | 'expired' | 'rateLimited' | 'unavailable';
 
-export type RankingView =
+export type RankingView<R> =
   | { kind: 'closed' }
-  /** Opened from the toolbar. `top` is null while loading or on error. */
-  | { kind: 'board'; top: LeaderboardEntry[] | null; error: RankingError | null }
-  /** An Endless run just ended: ask for a name. */
-  | { kind: 'form'; result: EndlessResult; matchId: string; busy: boolean; error: RankingError | null }
-  /** Saved: the board with the player's standing. */
-  | { kind: 'saved'; result: EndlessResult; saved: SubmitResponse }
+  /** Opened from the game's Ranking button: any game's board (tabs). `top` is null while loading or on error. */
+  | { kind: 'board'; game: GameId; top: LeaderboardEntry[] | null; error: RankingError | null }
+  /** A run just ended: ask for a name. */
+  | { kind: 'form'; result: R; matchId: string; busy: boolean; error: RankingError | null }
+  /** Saved: this game's board with the player's standing. */
+  | { kind: 'saved'; result: R; saved: SubmitResponse }
   /** Run over with the ranking unreachable, or a save the server refused for good. */
-  | { kind: 'final'; result: EndlessResult; message: 'offline' | 'rejected' | 'expired' };
+  | { kind: 'final'; result: R; message: 'offline' | 'rejected' | 'expired' };
 
-const NAME_KEY = 'volley-ranking-name';
+/** One name for every game. The old volleyball-only key is still read, so nobody has to type it again. */
+const NAME_KEY = 'ranking-name';
+const OLD_NAME_KEY = 'volley-ranking-name';
 
 export function rememberedName(): string {
   try {
-    return localStorage.getItem(NAME_KEY) ?? '';
+    return localStorage.getItem(NAME_KEY) ?? localStorage.getItem(OLD_NAME_KEY) ?? '';
   } catch {
     return '';
   }
@@ -55,22 +58,22 @@ function toError({ error, reason }: ApiErrorBody): RankingError {
 }
 
 /**
- * Global leaderboard flow around an Endless run: a ticket is requested at
- * kickoff, the name form opens when the CPU reaches its limit, and the save
- * returns the board.
+ * The global ranking flow around one run of `game`: a ticket is requested at
+ * kickoff, the name form opens when the run ends, and the save returns the
+ * board. Shared by every game; each passes its own result (rules.ts).
  * The name is checked here first for instant feedback; the Worker checks it
  * again, so a tampered client still can't save a banned name.
  */
-export function useRanking() {
-  const [view, setView] = useState<RankingView>({ kind: 'closed' });
+export function useRanking<G extends GameId>(game: G) {
+  type R = GameResults[G];
+  const [view, setView] = useState<RankingView<R>>({ kind: 'closed' });
   const ticket = useRef<Promise<string | null> | null>(null);
 
   const kickoff = useCallback(() => {
-    ticket.current = openMatch().then((r) => (r.ok ? r.data.matchId : null));
-  }, []);
+    ticket.current = openMatch(game).then((r) => (r.ok ? r.data.matchId : null));
+  }, [game]);
 
-  /** An Endless run ended (the CPU reached its limit). */
-  const finish = useCallback((result: EndlessResult) => {
+  const finish = useCallback((result: R) => {
     const pending = ticket.current ?? Promise.resolve(null);
     ticket.current = null;
     // Every finished run asks for a name, even a 0-point one: the board then shows where it landed.
@@ -92,7 +95,7 @@ export function useRanking() {
         return null;
       }
       setView({ ...view, busy: true, error: null });
-      const res = await submitScore({ matchId: view.matchId, name: check.name, ...view.result });
+      const res = await submitScore(game, { matchId: view.matchId, name: check.name, result: view.result });
       if (res.ok) {
         rememberName(check.name);
         setView({ kind: 'saved', result: view.result, saved: res.data });
@@ -106,18 +109,22 @@ export function useRanking() {
       }
       return null;
     },
-    [view],
+    [game, view],
   );
 
-  const openBoard = useCallback(async () => {
-    setView({ kind: 'board', top: null, error: null });
-    const res = await fetchTop();
-    setView((v) =>
-      v.kind === 'board'
-        ? { kind: 'board', top: res.ok ? res.data.top : null, error: res.ok ? null : toError(res.error) }
-        : v,
-    );
-  }, []);
+  /** Any game's board; defaults to this one. */
+  const openBoard = useCallback(
+    async (which: GameId = game) => {
+      setView({ kind: 'board', game: which, top: null, error: null });
+      const res = await fetchTop(which);
+      setView((v) =>
+        v.kind === 'board' && v.game === which
+          ? { ...v, top: res.ok ? res.data.top : null, error: res.ok ? null : toError(res.error) }
+          : v,
+      );
+    },
+    [game],
+  );
 
   /** The player is editing the name: the last error no longer applies. */
   const clearError = useCallback(() => setView((v) => (v.kind === 'form' && v.error ? { ...v, error: null } : v)), []);

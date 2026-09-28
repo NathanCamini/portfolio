@@ -1,14 +1,14 @@
-import { gameConfig } from '../src/config/game';
 import {
-  checkResult,
+  isGame,
   RANKING,
   type ApiErrorBody,
   type ApiErrorCode,
+  type GameId,
   type StartResponse,
-  type SubmitRequest,
   type TopResponse,
-} from '../src/components/volleyball/ranking/match';
-import { checkNickname } from '../src/components/volleyball/ranking/nickname';
+} from '../src/lib/ranking/contract';
+import { checkNickname } from '../src/lib/ranking/nickname';
+import { RULES, type GameResults, type GameRules } from '../src/lib/ranking/rules';
 import { handleApiRequest } from '../src/lib/resume-api';
 import * as store from './store';
 
@@ -16,29 +16,30 @@ import * as store from './store';
  * Cloudflare Worker. `run_worker_first: ["/api/*"]` in wrangler.jsonc routes
  * only the API here; every other path is served directly from the static assets.
  *
- * `/api/volley/*` is the beach-volley ranking below; the rest of `/api`
- * (GET /api/nathan, the résumé) is src/lib/resume-api.ts.
+ * `/api/ranking/:game` is the global ranking shared by the mini-games
+ * (`volley` Endless, `peek` trainer); the rest of `/api` (GET /api/nathan,
+ * the résumé) is src/lib/resume-api.ts.
  *
- * Only Endless is ranked: points scored before the CPU reaches its limit.
+ *   GET  /api/ranking/:game          → the game's top 10 (each player's best)
+ *   POST /api/ranking/:game/matches  → a single-use ticket, issued when a run kicks off
+ *   POST /api/ranking/:game/scores   → name + the game's result; the server validates it
  *
- *   GET  /api/volley/ranking  → the top 10 (each player's best run)
- *   POST /api/volley/matches  → a single-use ticket, issued when a run kicks off
- *   POST /api/volley/scores   → name + points + run clock; the server validates it
- *
- * Anti-cheat, by layer: the run clock must fit the minimum time per point
- * (the player's points plus the CPU's) AND the time the server saw pass since
- * the ticket was issued; each ticket buys one score; kickoffs and submissions
- * are rate limited per IP. It stops casual tampering (editing the request in
- * DevTools, replaying it); a patient forger could still post a plausible run.
+ * Anti-cheat, by layer: the result must pass the game's own rules
+ * (src/lib/ranking/rules.ts: counts that fit the engine, a clock that fits
+ * the time the server saw pass since the ticket was issued); each ticket buys
+ * one score; kickoffs and submissions are rate limited per IP. It stops casual
+ * tampering (editing the request in DevTools, replaying it); a patient forger
+ * could still post a plausible result.
  */
 
 export interface Env {
-  /** Absent on preview deployments (see wrangler.jsonc): the API answers 503 and the game plays offline. */
+  /** Absent on preview deployments (see wrangler.jsonc): the API answers 503 and the games play offline. */
   DB?: D1Database;
   KICKOFF_LIMIT?: RateLimit;
   SUBMIT_LIMIT?: RateLimit;
 }
 
+const RANKING_PATH = /^\/api\/ranking\/([a-z]+)(\/matches|\/scores)?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_BODY = 1024;
 
@@ -68,7 +69,7 @@ function json(body: unknown, status = 200): Response {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith('/api/volley/')) return handleApiRequest(request);
+    if (!url.pathname.startsWith('/api/ranking/')) return handleApiRequest(request);
     try {
       return await route(request, url, env);
     } catch (err) {
@@ -80,57 +81,75 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 function route(request: Request, url: URL, env: Env): Promise<Response> {
-  switch (`${request.method} ${url.pathname}`) {
-    case 'GET /api/volley/ranking':
-      return ranking(env);
-    case 'POST /api/volley/matches':
-      return kickoff(request, url, env);
-    case 'POST /api/volley/scores':
-      return submit(request, url, env);
+  const [, game = '', action = ''] = RANKING_PATH.exec(url.pathname) ?? [];
+  if (!isGame(game)) throw fail(404, 'not_found');
+  switch (`${request.method} ${action}`) {
+    case 'GET ':
+      return board(game, env);
+    case 'POST /matches':
+      return kickoff(game, request, url, env);
+    case 'POST /scores':
+      return submit(game, request, url, env);
     default:
       throw fail(404, 'not_found');
   }
 }
 
-async function ranking(env: Env): Promise<Response> {
-  const top = await store.top(database(env), RANKING.TOP);
+async function board(game: GameId, env: Env): Promise<Response> {
+  const top = await store.top(database(env), game, RANKING.TOP);
   return json({ top } satisfies TopResponse);
 }
 
-async function kickoff(request: Request, url: URL, env: Env): Promise<Response> {
+async function kickoff(game: GameId, request: Request, url: URL, env: Env): Promise<Response> {
   sameOrigin(request, url);
   await rateLimit(env.KICKOFF_LIMIT, request);
   const db = database(env);
   const matchId = crypto.randomUUID();
   const now = Date.now();
-  await store.openMatch(db, matchId, now, now - RANKING.MATCH_TTL_MS);
+  await store.openMatch(db, game, matchId, now, now - RANKING.MATCH_TTL_MS);
   return json({ matchId } satisfies StartResponse, 201);
 }
 
-async function submit(request: Request, url: URL, env: Env): Promise<Response> {
+async function submit<G extends GameId>(game: G, request: Request, url: URL, env: Env): Promise<Response> {
   sameOrigin(request, url);
   await rateLimit(env.SUBMIT_LIMIT, request);
-  const body = parseSubmit(await readJson(request));
+  const body = await readJson(request);
+  const {
+    matchId,
+    name,
+    result: raw,
+  } = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  if (typeof matchId !== 'string' || !UUID.test(matchId) || typeof name !== 'string' || name.length > 64) {
+    throw fail(400, 'bad_request');
+  }
+  const rules: GameRules<GameResults[G]> = RULES[game];
+  const result = rules.parse(raw);
+  if (!result) throw fail(400, 'bad_request');
 
-  // Cheap checks first; none of them spend the ticket, so the player can fix the name and retry.
-  const nick = checkNickname(body.name);
+  // The name first: a refused name doesn't spend the ticket, so the player can fix it and retry.
+  const nick = checkNickname(name);
   if (!nick.ok) throw fail(422, 'invalid_name', { reason: nick.reason });
-  const result = { points: body.points, durationMs: body.durationMs };
-  const problem = checkResult(result, gameConfig.endlessCpuScore);
-  if (problem) throw fail(422, problem);
 
   const db = database(env);
-  const startedAt = await store.matchStartedAt(db, body.matchId);
+  const startedAt = await store.matchStartedAt(db, game, matchId);
   if (startedAt === null) throw fail(404, 'match_not_found');
   const now = Date.now();
   const elapsed = now - startedAt;
   if (elapsed > RANKING.MATCH_TTL_MS) throw fail(410, 'match_expired');
-  // The game clock can't have run longer than the server has known about the match.
-  if (result.durationMs > elapsed + RANKING.CLOCK_SLACK_MS) throw fail(422, 'too_fast');
+  const problem = rules.check(result, elapsed);
+  if (problem) throw fail(422, problem);
 
   const saved = await store.saveScore(
     db,
-    { matchId: body.matchId, name: nick.name, key: nick.key, ...result, now },
+    {
+      game,
+      matchId,
+      name: nick.name,
+      key: nick.key,
+      score: rules.score(result),
+      detail: rules.detail(result),
+      now,
+    },
     RANKING.TOP,
   );
   if (!saved) throw fail(404, 'match_not_found');
@@ -165,20 +184,4 @@ async function readJson(request: Request): Promise<unknown> {
   } catch {
     throw fail(400, 'bad_request');
   }
-}
-
-function parseSubmit(value: unknown): SubmitRequest {
-  const v = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
-  const { matchId, name, points, durationMs } = v;
-  if (
-    typeof matchId !== 'string' ||
-    !UUID.test(matchId) ||
-    typeof name !== 'string' ||
-    name.length > 64 ||
-    typeof points !== 'number' ||
-    typeof durationMs !== 'number'
-  ) {
-    throw fail(400, 'bad_request');
-  }
-  return { matchId, name, points, durationMs };
 }

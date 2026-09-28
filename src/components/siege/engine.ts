@@ -10,6 +10,19 @@
 export const FIELD = { W: 960, H: 540 } as const;
 export const ROUND_MS = 30_000;
 
+/** Target pacing: the first peek, then a gap that shrinks as the round goes on. */
+export const SPAWN = { FIRST_MS: 500, GAP_MS: 650, GAP_PRESSURE_MS: 250, GAP_JITTER_MS: 200 } as const;
+
+/** Most targets a round can ever show: the first peek, then one per shortest gap. */
+export const MAX_TARGETS = Math.floor((ROUND_MS - SPAWN.FIRST_MS) / (SPAWN.GAP_MS - SPAWN.GAP_PRESSURE_MS)) + 1;
+
+/** Points for a hit: 100 head / 50 body, ×1.1 per hit already in the streak (up to ×2). */
+export const hitPoints = (head: boolean, streak: number) =>
+  Math.round((head ? 100 : 50) * (1 + Math.min(streak, 10) * 0.1));
+
+/** Points lost for shooting a hostage. */
+export const HOSTAGE_PENALTY = 150;
+
 export interface Opening {
   x: number;
   y: number;
@@ -116,7 +129,7 @@ export function createTrainer(): TrainerState {
 }
 
 export function startRound(s: TrainerState, now: number) {
-  Object.assign(s, createTrainer(), { phase: 'playing', startedAt: now, now, nextSpawn: now + 500 });
+  Object.assign(s, createTrainer(), { phase: 'playing', startedAt: now, now, nextSpawn: now + SPAWN.FIRST_MS });
 }
 
 /** 0 at the start of the round → 1 at the end: peeks get shorter and more frequent. */
@@ -184,7 +197,7 @@ export function update(s: TrainerState, now: number, rng: () => number = Math.ra
         hitAt: 0,
       });
     }
-    s.nextSpawn = now + 650 - 250 * p + rng() * 200;
+    s.nextSpawn = now + SPAWN.GAP_MS - SPAWN.GAP_PRESSURE_MS * p + rng() * SPAWN.GAP_JITTER_MS;
   }
 }
 
@@ -211,14 +224,13 @@ export function shoot(s: TrainerState, x: number, y: number): HitResult {
     t.hit = true;
     t.hitAt = s.now;
     if (t.kind === 'hostage') {
-      s.score = Math.max(0, s.score - 150);
+      s.score = Math.max(0, s.score - HOSTAGE_PENALTY);
       s.streak = 0;
       s.shake = 1;
-      s.popups.push({ x, y, text: '-150', kind: 'hostage', at: s.now });
+      s.popups.push({ x, y, text: `-${HOSTAGE_PENALTY}`, kind: 'hostage', at: s.now });
       return 'hostage';
     }
-    const multiplier = 1 + Math.min(s.streak, 10) * 0.1;
-    const points = Math.round((head ? 100 : 50) * multiplier);
+    const points = hitPoints(head, s.streak);
     s.score += points;
     s.streak++;
     s.bestStreak = Math.max(s.bestStreak, s.streak);

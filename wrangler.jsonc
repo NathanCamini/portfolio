@@ -1,12 +1,12 @@
 // Cloudflare Workers: the static export in ./out plus a small Worker for /api/*
-// (résumé API and the volleyball ranking). `npm run deploy` builds the static
-// export into ./out and uploads both.
+// (résumé API and the mini-games' global ranking). `npm run deploy` builds the
+// static export into ./out and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nathan-camini-portfolio",
   "compatibility_date": "2026-09-01",
   // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts);
-  // /api/volley/* — the volleyball leaderboard (worker/store.ts, D1).
+  // /api/ranking/:game — the mini-games' global ranking (worker/store.ts, D1).
   "main": "worker/index.ts",
   "assets": {
     "directory": "./out",
@@ -21,7 +21,7 @@
   "define": {
     "process.env.NEXT_PUBLIC_SITE_URL": "undefined",
   },
-  // Global leaderboard. No database_id: the first `wrangler deploy` creates the
+  // Global ranking. No database_id: the first `wrangler deploy` creates the
   // database by name (and reuses it afterwards); the Worker creates the tables
   // from migrations/ on first use.
   "d1_databases": [
@@ -31,7 +31,7 @@
       "migrations_dir": "migrations",
     },
   ],
-  // Per-IP limits (a match lasts at least ~15 s, so 6 kickoffs a minute is plenty).
+  // Per-IP limits, shared by every game (a volley run lasts 15 s+, a trainer round 30 s: 6 kickoffs a minute is plenty).
   "ratelimits": [
     { "name": "KICKOFF_LIMIT", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
     { "name": "SUBMIT_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },

@@ -8,8 +8,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { celebrate, originOf } from '@/lib/confetti';
 import type { Mode, StageId } from './engine/stages';
 import { saveCampaignStage, savedCampaignStage, savedMode, saveMode, type CampaignStage } from './progress';
-import { RankingOverlay } from './RankingOverlay';
-import { useRanking } from './useRanking';
+import { RankingOverlay } from '@/components/ranking/RankingOverlay';
+import { useRanking } from '@/components/ranking/useRanking';
 import { useVolleyballGame, type GameKey, type MatchEnd } from './useVolleyballGame';
 import styles from './VolleyballGame.module.css';
 
@@ -36,7 +36,7 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
     () => false,
   );
 
-  const ranking = useRanking();
+  const ranking = useRanking('volley');
   const overlayOpen = ranking.view.kind !== 'closed';
 
   // Campaign progress and the last mode come back on the next visit (see progress.ts).
@@ -143,13 +143,13 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
           <button
             type="button"
             className={`btn btn-secondary ${styles.toolBtn}`}
-            onClick={ranking.view.kind === 'board' ? ranking.close : ranking.openBoard}
+            onClick={() => (ranking.view.kind === 'board' ? ranking.close() : void ranking.openBoard())}
             aria-pressed={ranking.view.kind === 'board'}
             // The name form holds an unsaved run: finish or skip it first.
             disabled={ranking.view.kind === 'form'}
           >
             <Trophy size={14} />
-            {vb.ranking.button}
+            {t.ranking.button}
           </button>
           {canFullscreen && (
             <button type="button" className={`btn btn-secondary ${styles.toolBtn}`} onClick={toggleFullscreen}>
@@ -174,12 +174,13 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
         />
         {ranking.view.kind !== 'closed' && (
           <RankingOverlay
+            game="volley"
             view={ranking.view}
-            strings={vb.ranking}
+            strings={t.ranking}
             lang={htmlLang[locale]}
             onSave={(name) => void ranking.save(name)}
             onEdit={ranking.clearError}
-            onBoard={ranking.openBoard}
+            onBoard={(g) => void ranking.openBoard(g)}
             onAgain={() => {
               ranking.close();
               restart();

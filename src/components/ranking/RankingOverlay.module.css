@@ -1,4 +1,4 @@
-/* Layer over the court: dims the paused game, card centred, scrolls if the stage is short. */
+/* Layer over a game's canvas: dims the paused game, card centred, scrolls if the stage is short. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -222,4 +222,10 @@
   .scoreline {
     font-size: 26px;
   }
+}
+
+/* Board tabs: one per game. */
+.tabs {
+  align-self: center;
+  font-size: 13px;
 }
