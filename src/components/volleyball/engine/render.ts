@@ -14,7 +14,7 @@ export interface View {
 
 const FONT = 'Inter, system-ui, sans-serif';
 
-/** Colours of one arena. The beach uses the design tokens; the boss's inferno is its own. */
+/** Colours of one arena. The beach uses the design tokens; the bug's red alert is its own. */
 interface Scene {
   skyTop: string;
   skyBottom: string;
@@ -53,7 +53,8 @@ const beach = (C: Palette): Scene => ({
   subtitle: C.a300,
 });
 
-const INFERNO: Scene = {
+/** The boss arena: a production incident — red-alert sky, alarm light, glitching pixels. */
+const RED_ALERT: Scene = {
   skyTop: '#140304',
   skyBottom: '#560c0c',
   moon: '#d62828',
@@ -72,19 +73,19 @@ const INFERNO: Scene = {
   subtitle: '#ffb4a2',
 };
 
-const sceneFor = (stage: Stage, C: Palette) => (stage.theme === 'inferno' ? INFERNO : beach(C));
+const sceneFor = (stage: Stage, C: Palette) => (stage.theme === 'bug' ? RED_ALERT : beach(C));
 
 /**
  * Draws one frame. The 960×540 court is uniformly scaled and centred
  * (letterboxed) inside the stage, and everything is drawn with design tokens —
- * except the boss arena, which turns the night beach into a red inferno.
+ * except the boss arena, where a bug has taken the night beach down: red alert.
  */
 export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: View, C: Palette, T: GameStrings) {
   const { w, h, dpr } = view;
   const { W, H, GROUND, NET_X, NET_TOP, NET_W } = FIELD;
   const b = g.ball;
   const S = sceneFor(g.stage, C);
-  const inferno = g.stage.theme === 'inferno';
+  const bug = g.stage.theme === 'bug';
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = C.bg;
@@ -92,29 +93,29 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
 
   const s = Math.min(w / W, h / H);
   // The boss's points shake the arena for a moment.
-  const hit = inferno && g.phase === 'point' && g.lastScorer === 1 ? Math.max(0, 1 - g.phaseTime / 400) : 0;
+  const hit = bug && g.phase === 'point' && g.lastScorer === 1 ? Math.max(0, 1 - g.phaseTime / 400) : 0;
   const shake = hit * 6 * Math.sin(g.clock * 2.3);
   const ox = (w - W * s) / 2 + shake * s;
   const oy = (h - H * s) / 2;
   ctx.setTransform(dpr * s, 0, 0, dpr * s, ox * dpr, oy * dpr);
 
-  // Sky, then twinkling stars (beach) or rising embers (inferno), and the moon.
+  // Sky, then twinkling stars (beach) or rising glitch pixels (bug), and the moon / alarm light.
   const sky = ctx.createLinearGradient(0, 0, 0, 430);
   sky.addColorStop(0, S.skyTop);
   sky.addColorStop(1, S.skyBottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, 430);
 
-  if (inferno) {
-    ctx.fillStyle = '#ff8a3d';
-    for (const [x, y, r] of g.stars) {
+  if (bug) {
+    g.stars.forEach(([x, y, r], i) => {
       const rise = (g.clock * (0.5 + r * 0.4) + y * 3) % 440;
-      const ey = 432 - rise;
+      const size = 2 + Math.round(r * 2);
       ctx.globalAlpha = Math.max(0, 0.85 - rise / 480);
-      ctx.beginPath();
-      ctx.arc(x + Math.sin(g.clock / 26 + x) * 7, ey, r * 1.3, 0, Math.PI * 2);
-      ctx.fill();
-    }
+      ctx.fillStyle = i % 3 === 0 ? '#39e6ff' : '#ff5a3c';
+      // Pixels snap sideways now and then instead of drifting: they're glitches, not sparks.
+      const jump = Math.sin(g.clock / 9 + i) > 0.92 ? 8 : 0;
+      ctx.fillRect(Math.round(x + jump), Math.round(432 - rise), size, size);
+    });
   } else {
     ctx.fillStyle = C.n300;
     for (const [x, y, r] of g.stars) {
@@ -178,16 +179,22 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
   ctx.fillRect(NET_X - NET_W / 2 - 1, NET_TOP - 4, NET_W + 2, 6);
 
   drawSlime(ctx, g.player, b, C.accent, true, C);
-  if (inferno) glow(ctx, g.cpu.x, g.cpu.y - g.cpu.r * 0.4, g.cpu.r * 0.6, g.cpu.r * 1.9, S.moonGlow);
-  drawSlime(ctx, g.cpu, b, S.cpu, false, C, inferno);
+  if (bug) {
+    glow(ctx, g.cpu.x, g.cpu.y - g.cpu.r * 0.4, g.cpu.r * 0.6, g.cpu.r * 1.9, S.moonGlow);
+    // It glitches while it misreads a ball — and in short random flickers.
+    const glitching = g.cpuMiss !== 0 && b.x > NET_X ? 1 : Math.sin(g.clock / 7) > 0.97 ? 0.6 : 0;
+    drawBug(ctx, g.cpu, b, g.clock, glitching);
+  } else {
+    drawSlime(ctx, g.cpu, b, S.cpu, false, C);
+  }
 
   // Ball with a glow and two spinning seams.
-  glow(ctx, b.x, b.y, b.r, b.r + 18, inferno ? S.wave : C.accent);
+  glow(ctx, b.x, b.y, b.r, b.r + 18, bug ? S.wave : C.accent);
   ctx.fillStyle = C.n100;
   ctx.beginPath();
   ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = inferno ? '#c1121f' : C.a600;
+  ctx.strokeStyle = bug ? '#c1121f' : C.a600;
   ctx.lineWidth = 2;
   const spin = g.clock * 0.1;
   for (const start of [spin, spin + 3.1]) {
@@ -196,8 +203,8 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
     ctx.stroke();
   }
 
-  // The inferno breathes: a pulsing red vignette, and a flash when the boss scores.
-  if (inferno) {
+  // Red alert: a pulsing red vignette, and a flash when the bug scores.
+  if (bug) {
     const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.95);
     v.addColorStop(0, 'rgba(120,0,0,0)');
     v.addColorStop(1, `rgba(150,0,0,${0.4 + 0.12 * Math.sin(g.clock / 18)})`);
@@ -217,11 +224,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
   ctx.font = `500 48px ${FONT}`;
   ctx.fillText(String(g.score[0]), 400, 74);
   ctx.fillText(endless ? `${g.score[1]}/${g.stage.limits[1]}` : String(g.score[1]), 560, 74);
-  ctx.fillStyle = inferno ? S.subtitle : C.n500;
+  ctx.fillStyle = bug ? S.subtitle : C.n500;
   ctx.font = `500 12px ${FONT}`;
   ctx.fillText(T.you, 400, 96);
-  ctx.fillText(inferno ? T.boss : T.cpu, 560, 96);
-  ctx.fillStyle = inferno ? S.groundEdge : C.n700;
+  ctx.fillText(bug ? T.boss : T.cpu, 560, 96);
+  ctx.fillStyle = bug ? S.groundEdge : C.n700;
   ctx.fillRect(479, 44, 2, 34);
 
   const banner = (big: string, small: string, hint?: string) => {
@@ -234,7 +241,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
     ctx.font = `400 17px ${FONT}`;
     ctx.fillText(small, W / 2, 276);
     if (hint) {
-      ctx.fillStyle = inferno ? S.tape : C.n300;
+      ctx.fillStyle = bug ? S.tape : C.n300;
       ctx.font = `400 14px ${FONT}`;
       ctx.fillText(hint, W / 2, 308);
     }
@@ -248,9 +255,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
     else if (g.stage.id === 'boss') banner(won ? T.bossWin : T.bossLose, won ? T.rematch : T.retry);
     else banner(won ? T.phaseClear : T.lose, won ? T.toBoss : T.retry);
   } else if (g.phase === 'point') {
-    ctx.fillStyle = g.lastScorer === 0 ? C.a300 : inferno ? S.title : C.n300;
+    ctx.fillStyle = g.lastScorer === 0 ? C.a300 : bug ? S.title : C.n300;
     ctx.font = `500 26px ${FONT}`;
-    ctx.fillText(g.lastScorer === 0 ? T.pYou : inferno ? T.pBoss : T.pCpu, W / 2, 200);
+    ctx.fillText(g.lastScorer === 0 ? T.pYou : bug ? T.pBoss : T.pCpu, W / 2, 200);
   }
 }
 
@@ -271,30 +278,8 @@ function glow(ctx: CanvasRenderingContext2D, x: number, y: number, inner: number
   ctx.globalAlpha = 1;
 }
 
-/** Half-disc player with an eye that tracks the ball; the boss gets horns and a scowl. */
-function drawSlime(
-  ctx: CanvasRenderingContext2D,
-  p: Body,
-  ball: Body,
-  color: string,
-  lookRight: boolean,
-  C: Palette,
-  boss = false,
-) {
-  if (boss) {
-    ctx.fillStyle = '#f1e3d3';
-    for (const dir of [-1, 1]) {
-      const bx = p.x + dir * p.r * 0.5;
-      const by = p.y - p.r * 0.78;
-      ctx.beginPath();
-      ctx.moveTo(bx - dir * 11, by + 6);
-      ctx.quadraticCurveTo(bx + dir * 4, by - 16, bx + dir * 16, by - 30);
-      ctx.quadraticCurveTo(bx + dir * 8, by - 8, bx + dir * 11, by + 8);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
+/** Half-disc player with an eye that tracks the ball. */
+function drawSlime(ctx: CanvasRenderingContext2D, p: Body, ball: Body, color: string, lookRight: boolean, C: Palette) {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(p.x, p.y, p.r, Math.PI, 0);
@@ -303,26 +288,133 @@ function drawSlime(
 
   const ex = p.x + p.r * 0.42 * (lookRight ? 1 : -1);
   const ey = p.y - p.r * 0.55;
-  ctx.fillStyle = boss ? '#ffe066' : C.n100;
+  ctx.fillStyle = C.n100;
   ctx.beginPath();
-  ctx.arc(ex, ey, boss ? 9 : 8, 0, Math.PI * 2);
+  ctx.arc(ex, ey, 8, 0, Math.PI * 2);
   ctx.fill();
 
   const a = Math.atan2(ball.y - ey, ball.x - ex);
-  ctx.fillStyle = boss ? '#2b0000' : C.bg;
+  ctx.fillStyle = C.bg;
+  ctx.beginPath();
+  ctx.arc(ex + Math.cos(a) * 3.5, ey + Math.sin(a) * 3.5, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const SHELL = '#e0322f';
+const INK = '#17090c';
+
+/**
+ * The boss: a ladybug facing the player — spotted shell over the same
+ * half-disc the physics uses, black head with an eye on the ball, waving
+ * antennae and scuttling legs. `glitch` (0–1) overlays cyan and magenta
+ * ghosts and a torn slice, like a corrupted frame.
+ */
+function drawBug(ctx: CanvasRenderingContext2D, p: Body, ball: Body, clock: number, glitch: number) {
+  const { x, y, r } = p;
+  const moving = Math.abs(p.vx) > 0.5 || y < FIELD.GROUND;
+
+  // Legs: three a side, stepping while it moves.
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    for (const side of [-1, 1]) {
+      const lift = moving ? Math.max(0, Math.sin(clock * 0.45 + i * 2.1 + (side > 0 ? Math.PI : 0))) * 5 : 0;
+      const hip = x + side * r * (0.35 + i * 0.22);
+      ctx.beginPath();
+      ctx.moveTo(hip, y - 6);
+      ctx.lineTo(hip + side * 9, y - 12 - lift);
+      ctx.lineTo(hip + side * 15, y - lift * 0.4);
+      ctx.stroke();
+    }
+  }
+
+  // Shell with a centre seam and spots.
+  ctx.fillStyle = SHELL;
+  ctx.beginPath();
+  ctx.arc(x, y, r, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x + r * 0.12, y - r);
+  ctx.lineTo(x + r * 0.12, y);
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  for (const [sx, sy, sr] of [
+    [0.45, 0.35, 0.13],
+    [0.62, 0.72, 0.1],
+    [-0.12, 0.62, 0.12],
+    [0.28, 0.78, 0.09],
+    [-0.02, 0.3, 0.09],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(x + sx * r, y - sy * r, sr * r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Head at the front (towards the player), with antennae.
+  const hx = x - r * 0.72;
+  const hy = y - r * 0.42;
+  const hr = r * 0.4;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  // Two antennae in a V: one leaning forward, one up and back.
+  for (const [baseX, tipDX, tipDY, phase] of [
+    [-0.35, -26, -24, 0],
+    [0.25, 6, -34, 1.7],
+  ]) {
+    const wave = Math.sin(clock / 11 + phase) * 5;
+    const rootX = hx + hr * baseX;
+    const rootY = hy - hr * 0.85;
+    const tipX = rootX + tipDX + wave * 0.6;
+    const tipY = rootY + tipDY + wave;
+    ctx.beginPath();
+    ctx.moveTo(rootX, rootY);
+    ctx.quadraticCurveTo(rootX + tipDX * 0.2, tipY + 6, tipX, tipY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+  ctx.fill();
+
+  // One big eye on the ball.
+  const ex = hx - hr * 0.3;
+  const ey = hy - hr * 0.2;
+  ctx.fillStyle = '#fff4e6';
+  ctx.beginPath();
+  ctx.arc(ex, ey, 8, 0, Math.PI * 2);
+  ctx.fill();
+  const a = Math.atan2(ball.y - ey, ball.x - ex);
+  ctx.fillStyle = INK;
   ctx.beginPath();
   ctx.arc(ex + Math.cos(a) * 3.5, ey + Math.sin(a) * 3.5, 4, 0, Math.PI * 2);
   ctx.fill();
 
-  if (boss) {
-    // Brow slanting down towards the nose: angry.
-    const dir = lookRight ? 1 : -1;
-    ctx.strokeStyle = '#2b0000';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(ex - dir * 12, ey - 17);
-    ctx.lineTo(ex + dir * 10, ey - 9);
-    ctx.stroke();
+  if (glitch) {
+    // Corrupted frame: cyan and magenta ghosts pulled apart, plus a torn slice of shell.
+    const dx = 8 * glitch * (Math.sin(clock * 3.1) > 0 ? 1 : -1);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.5 * glitch;
+    for (const [color, off] of [
+      ['#39e6ff', -dx],
+      ['#ff2bd6', dx],
+    ] as const) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x + off, y, r, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 0.85 * glitch;
+    ctx.fillStyle = SHELL;
+    const band = y - r * (0.35 + 0.3 * Math.abs(Math.sin(clock * 0.7)));
+    ctx.fillRect(x - r + dx * 1.5, band, r * 2, 5);
+    ctx.globalAlpha = 1;
   }
 }

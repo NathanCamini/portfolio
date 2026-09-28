@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { botInput } from './bot';
+import { HUMAN, playerBot } from './bot';
 import { CPU, FIELD, TIMING } from './constants';
 import { createGame, primaryAction, stepGame } from './physics';
-import { nextStage, STAGES, type StageId } from './stages';
+import { nextStage, STAGES } from './stages';
 import type { GameState, Input } from './types';
 
 const idle: Input = { left: false, right: false, jump: false };
@@ -91,7 +91,7 @@ describe('campaign and endless', () => {
     finish(g, [7, 5]);
     primaryAction(g); // to the boss's title screen, not straight into a match
     expect([g.stage.id, g.phase]).toEqual(['boss', 'title']);
-    expect(g.stage.theme).toBe('inferno');
+    expect(g.stage.theme).toBe('bug');
 
     primaryAction(g);
     finish(g, [2, 7]);
@@ -130,35 +130,31 @@ describe('campaign and endless', () => {
 });
 
 describe('difficulty', () => {
-  // The same stand-in player against each CPU, over seeded first-to-7 matches.
-  function share(stage: StageId, profile: keyof typeof CPU, matches = 12) {
+  // A human-like player (250 ms reactions) against a CPU profile, over seeded first-to-7 matches.
+  function winRate(profile: keyof typeof CPU, matches: number) {
     let won = 0;
-    let points = 0;
-    let conceded = 0;
     for (let i = 0; i < matches; i++) {
-      const g = createGame(stage, seeded(i + 1));
+      const g = createGame('easy', seeded(i + 1));
       g.stage = { ...g.stage, cpu: CPU[profile], limits: [7, 7] };
       g.cpu.r = CPU[profile].radius;
       primaryAction(g);
       const rng = seeded(1000 + i);
-      const bot = seeded(5000 + i);
+      const bot = playerBot(HUMAN, seeded(5000 + i));
       for (let t = 0; g.phase !== 'over' && t < 1800; t += TIMING.STEP) {
-        stepGame(g, TIMING.STEP, botInput(g, TIMING.STEP * 60, bot), rng);
+        stepGame(g, TIMING.STEP, bot(g, TIMING.STEP * 60), rng);
       }
       if (g.score[0] > g.score[1]) won++;
-      points += g.score[0];
-      conceded += g.score[1];
     }
-    return { wins: won / matches, points: points / (points + conceded) };
+    return won / matches;
   }
 
-  it('phase 1 is easier than the original CPU, and the boss is almost unbeatable', () => {
-    const easy = share('easy', 'easy');
-    const normal = share('endless', 'normal');
-    const boss = share('boss', 'boss');
-    expect(easy.points).toBeGreaterThan(normal.points + 0.15);
-    expect(boss.points).toBeLessThan(normal.points - 0.15);
-    expect(boss.wins).toBeLessThan(0.1);
-    expect(boss.points).toBeGreaterThan(0.1); // hard, not literally impossible: points still happen
+  // Tuned over 500 matches each to ~98% (phase 1) and ~60% (boss); a smaller sample keeps the test quick.
+  it('a typical player almost always clears phase 1 and beats the boss more often than not', () => {
+    const easy = winRate('easy', 30);
+    const boss = winRate('boss', 30);
+    expect(easy).toBeGreaterThanOrEqual(0.9);
+    expect(boss).toBeGreaterThan(0.35);
+    expect(boss).toBeLessThan(0.85);
+    expect(boss).toBeLessThan(easy);
   }, 30_000);
 });
