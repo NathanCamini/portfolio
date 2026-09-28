@@ -7,13 +7,13 @@ import { useTypewriter } from '@/hooks/useTypewriter';
 import { useI18n } from '@/i18n/I18nProvider';
 import styles from './Hobbies.module.css';
 
-/** 03 — Hobbies header + 03a (AI). The car (03b) and volleyball (03c) are their own sections. */
+/** Hobbies header + AI. The car, volleyball and games are their own sections. */
 export function Hobbies() {
   const { t } = useI18n();
 
   return (
     <section id="hobbies" className={`section ${styles.section}`}>
-      <Reveal className="eyebrow">{t.hobbies.label}</Reveal>
+      <Reveal className="eyebrow path">{t.hobbies.label}</Reveal>
       <Reveal as="h2" delay={80} className={`section-title ${styles.title}`}>
         {t.hobbies.title}
       </Reveal>
@@ -23,7 +23,7 @@ export function Hobbies() {
 }
 
 /**
- * 03a — "AI lab": a fake terminal that types a prompt, then reveals the
+ * AI — "AI lab": a fake terminal that types a prompt, then reveals the
  * outcome. The typing state is isolated here so ~36 renders/s touch only
  * this subtree, and it pauses while off-screen.
  */
@@ -43,7 +43,7 @@ function AiLab() {
   return (
     <div className={styles.aiGrid}>
       <div>
-        <Reveal className="eyebrow-muted">{ai.label}</Reveal>
+        <Reveal className="eyebrow-muted path">{ai.label}</Reveal>
         <Reveal as="h3" delay={80} className="sub-title">
           {ai.title}
         </Reveal>

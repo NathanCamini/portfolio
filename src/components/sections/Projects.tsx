@@ -33,7 +33,7 @@ const card: Variants = {
   },
 };
 
-/** 02 — Projects: shipped work vs. future ideas behind a segmented control. */
+/** Projects: shipped work vs. future ideas behind a segmented control. */
 export function Projects() {
   const { t } = useI18n();
   const p = t.projects;
@@ -41,7 +41,7 @@ export function Projects() {
 
   return (
     <section id="projetos" className="section">
-      <Reveal className="eyebrow">{p.label}</Reveal>
+      <Reveal className="eyebrow path">{p.label}</Reveal>
 
       <div className={styles.head}>
         <Reveal as="h2" delay={80} className={`section-title ${styles.title}`}>

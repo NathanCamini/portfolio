@@ -31,7 +31,7 @@ export const en: Dictionary = {
     'AI',
   ],
   bio: {
-    label: '01 — Bio',
+    label: 'Bio',
     title: 'From wondering how things work to writing the code that makes them work.',
     p1: 'I started in the IT team of the Brazilian Army’s 6th Signal Battalion, looking after the network, phones and computers. From there I studied Systems Analysis and Development at IFRS, interned on an ERP that was still being validated — side by side with the client — and spent almost two years in industrial sales, where I learned to negotiate and to understand what a client really needs.',
     p2: 'Today I’m a software developer at Tramontina: I maintain legacy systems in Genero, adapted the system for Brazil’s tax reform and build new applications with .NET/C# and Next.js. Alongside that, I’m in graduate school for AI Engineering and MLOps at PUC Minas, learning how to take models from the notebook to production.',
@@ -96,7 +96,7 @@ export const en: Dictionary = {
     ],
   },
   projects: {
-    label: '02 — Projects',
+    label: 'Projects',
     title: 'What has shipped, and what is still in the notebook.',
     tabPast: 'Portfolio',
     tabFuture: 'Future ideas',
@@ -150,11 +150,11 @@ export const en: Dictionary = {
     ],
   },
   hobbies: {
-    label: '03 — Hobbies',
+    label: 'Hobbies',
     title: 'Four things that fill my free time and end up becoming code.',
   },
   ai: {
-    label: '03a — Artificial Intelligence',
+    label: 'Artificial Intelligence',
     title: 'AI as a drafting partner.',
     body: 'I use language models to generate ideas in bulk, prototype quickly and review code. The final call and what ships to production are still mine.',
     promptLabel: 'Prompt',
@@ -178,7 +178,7 @@ export const en: Dictionary = {
     ],
   },
   car: {
-    label: '03b — Cars',
+    label: 'Cars',
     title: 'A 911 GT3 RS that drives with the scroll.',
     body: 'Horizontal position comes from page scroll. Rotation comes from your mouse. They live in two separate 3D groups, so one never interferes with the other.',
     hint: 'Drag to rotate · double-click to reset',
@@ -187,7 +187,7 @@ export const en: Dictionary = {
     canvasLabel: '3D Porsche 911 GT3 RS. Scroll the page to move it and drag to rotate it.',
   },
   volleyball: {
-    label: '03c — Beach volleyball',
+    label: 'Beach volleyball',
     title: 'Fancy a quick match on the sand?',
     body: 'A 1-on-1 mini-game against the computer. First to 7 points wins.',
     open: 'Open mini-game',
@@ -217,7 +217,7 @@ export const en: Dictionary = {
     },
   },
   games: {
-    label: '03d — Games',
+    label: 'Games',
     title: 'Rainbow Six Siege: where patience beats reflexes.',
     body: 'It’s the game I play the most. I love the tactical side — intel, utility, angles — and how one destructible wall changes the whole round. It feels like systems design: whoever understands the map wins.',
     mainLabel: 'Mains',
@@ -249,7 +249,7 @@ export const en: Dictionary = {
     },
   },
   contact: {
-    label: '04 — Contact',
+    label: 'Contact',
     title: 'Got a system to scale or a bug that is weird enough? Let’s talk.',
   },
   footer: {

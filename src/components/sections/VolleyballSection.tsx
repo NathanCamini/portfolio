@@ -16,7 +16,7 @@ import styles from './VolleyballSection.module.css';
 const PANEL_ID = 'volleyball-game';
 
 /**
- * 03c — Beach volleyball, presented as an "arcade stage": an animated rally
+ * Beach volleyball, presented as an "arcade stage": an animated rally
  * poster, a pulsing Play button and a floating shortcut elsewhere on the page
  * (VolleyFab). Opening expands the same game panel as before (height 0 → auto,
  * 650 ms) and scrolls it into view. The game is only mounted while open.
@@ -56,7 +56,7 @@ export function VolleyballSection() {
 
   return (
     <section id="volei" className={`section ${styles.section}`}>
-      <Reveal className="eyebrow-muted">{vb.label}</Reveal>
+      <Reveal className="eyebrow-muted path">{vb.label}</Reveal>
 
       <Reveal delay={80}>
         <div className={styles.stage}>

@@ -337,6 +337,13 @@ a:hover {
   text-transform: uppercase;
   color: var(--color-neutral-500);
 }
+/* Section labels read like a route ("/ Projetos"); the slash is decoration, hidden from screen readers. */
+.path::before {
+  content: '/\00a0';
+  content: '/\00a0' / '';
+  color: var(--color-accent);
+  font-weight: 600;
+}
 .section-title {
   margin: 0;
   font-weight: 500;

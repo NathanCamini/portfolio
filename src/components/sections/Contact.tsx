@@ -10,7 +10,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { celebrate, originOf } from '@/lib/confetti';
 import styles from './Contact.module.css';
 
-/** 04 — Contact + footer with the name as the page's closing statement. Links come from src/config/site.ts. */
+/** Contact + footer with the name as the page's closing statement. Links come from src/config/site.ts. */
 export function Contact() {
   const { t } = useI18n();
   const letters = Array.from(site.name);
@@ -18,7 +18,7 @@ export function Contact() {
   return (
     <>
       <section id="contato" className={`section ${styles.section}`}>
-        <Reveal className="eyebrow">{t.contact.label}</Reveal>
+        <Reveal className="eyebrow path">{t.contact.label}</Reveal>
         <Reveal as="h2" delay={80} className={styles.title}>
           {t.contact.title}
         </Reveal>

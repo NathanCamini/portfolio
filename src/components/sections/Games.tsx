@@ -6,14 +6,14 @@ import { PeekTrainer } from '@/components/siege/PeekTrainer';
 import { useI18n } from '@/i18n/I18nProvider';
 import styles from './Games.module.css';
 
-/** 03d — Games: Rainbow Six Siege, with a playable Siege-style aim trainer. */
+/** Games: Rainbow Six Siege, with a playable Siege-style aim trainer. */
 export function Games() {
   const { t } = useI18n();
   const g = t.games;
 
   return (
     <section id="games" className={`section ${styles.section}`}>
-      <Reveal className="eyebrow-muted">{g.label}</Reveal>
+      <Reveal className="eyebrow-muted path">{g.label}</Reveal>
 
       <div className={styles.grid}>
         <div className={styles.copy}>

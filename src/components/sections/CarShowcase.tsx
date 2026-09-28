@@ -14,7 +14,7 @@ const CarCanvas = dynamic(() => import('@/components/three/CarCanvas'), { ssr: f
 type Status = 'idle' | 'ready' | 'error';
 
 /**
- * 03b — 3D car. A 300vh section whose inner 100vh stage is `position: sticky`:
+ * Cars — 3D car. A 300vh section whose inner 100vh stage is `position: sticky`:
  * while the page scrolls through the section, the stage stays pinned and the
  * scroll distance is converted into a 0→1 progress value that drives the car.
  */
@@ -53,7 +53,7 @@ export function CarShowcase() {
 
         <div className={styles.overlay}>
           <div className={styles.copy}>
-            <Reveal className="eyebrow-muted">{t.car.label}</Reveal>
+            <Reveal className="eyebrow-muted path">{t.car.label}</Reveal>
             <Reveal as="h3" delay={80} id="car-title" className="sub-title">
               {t.car.title}
             </Reveal>
