@@ -1,0 +1,73 @@
+.hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 720px;
+  height: 720px;
+  margin: -360px 0 0 -360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 22%, transparent) 0%, transparent 62%);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.inner {
+  position: relative;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 120px var(--gutter) 80px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.title {
+  margin: 0;
+  max-width: 16ch;
+  font-weight: 500;
+  font-size: clamp(40px, 7vw, 92px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.sub {
+  margin: 28px 0 0;
+  max-width: 52ch;
+  font-size: clamp(16px, 1.6vw, 19px);
+  line-height: 1.6;
+  color: var(--color-neutral-400);
+  text-wrap: pretty;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 96px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
