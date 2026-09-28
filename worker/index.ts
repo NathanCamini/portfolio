@@ -2,7 +2,6 @@ import { gameConfig } from '../src/config/game';
 import {
   checkResult,
   RANKING,
-  scoreMatch,
   type ApiErrorBody,
   type ApiErrorCode,
   type StartResponse,
@@ -20,17 +19,17 @@ import * as store from './store';
  * `/api/volley/*` is the beach-volley ranking below; the rest of `/api`
  * (GET /api/nathan, the résumé) is src/lib/resume-api.ts.
  *
- *   GET  /api/volley/ranking  → the top 10 (each player's best)
- *   POST /api/volley/matches  → a single-use ticket, issued at kickoff
- *   POST /api/volley/scores   → name + result; the server validates and scores it
+ * Only Endless is ranked: points scored before the CPU reaches its limit.
  *
- * Anti-cheat, by layer: the client never sends a score, only the scoreline
- * and the match clock, and the server computes the points itself; the
- * scoreline must be one a match can end on; the clock must fit the minimum
- * time per point AND the time the server saw pass since the ticket was
- * issued; each ticket buys one score; kickoffs and submissions are rate
- * limited per IP. It stops casual tampering (editing the request in DevTools,
- * replaying it); a patient forger could still post a plausible result.
+ *   GET  /api/volley/ranking  → the top 10 (each player's best run)
+ *   POST /api/volley/matches  → a single-use ticket, issued when a run kicks off
+ *   POST /api/volley/scores   → name + points + run clock; the server validates it
+ *
+ * Anti-cheat, by layer: the run clock must fit the minimum time per point
+ * (the player's points plus the CPU's) AND the time the server saw pass since
+ * the ticket was issued; each ticket buys one score; kickoffs and submissions
+ * are rate limited per IP. It stops casual tampering (editing the request in
+ * DevTools, replaying it); a patient forger could still post a plausible run.
  */
 
 export interface Env {
@@ -116,10 +115,9 @@ async function submit(request: Request, url: URL, env: Env): Promise<Response> {
   // Cheap checks first; none of them spend the ticket, so the player can fix the name and retry.
   const nick = checkNickname(body.name);
   if (!nick.ok) throw fail(422, 'invalid_name', { reason: nick.reason });
-  const result = { player: body.player, cpu: body.cpu, durationMs: body.durationMs };
-  const problem = checkResult(result, gameConfig.winScore);
+  const result = { points: body.points, durationMs: body.durationMs };
+  const problem = checkResult(result, gameConfig.endlessCpuScore);
   if (problem) throw fail(422, problem);
-  const score = scoreMatch(result);
 
   const db = database(env);
   const startedAt = await store.matchStartedAt(db, body.matchId);
@@ -132,7 +130,7 @@ async function submit(request: Request, url: URL, env: Env): Promise<Response> {
 
   const saved = await store.saveScore(
     db,
-    { matchId: body.matchId, name: nick.name, key: nick.key, score, ...result, now },
+    { matchId: body.matchId, name: nick.name, key: nick.key, ...result, now },
     RANKING.TOP,
   );
   if (!saved) throw fail(404, 'match_not_found');
@@ -171,17 +169,16 @@ async function readJson(request: Request): Promise<unknown> {
 
 function parseSubmit(value: unknown): SubmitRequest {
   const v = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
-  const { matchId, name, player, cpu, durationMs } = v;
+  const { matchId, name, points, durationMs } = v;
   if (
     typeof matchId !== 'string' ||
     !UUID.test(matchId) ||
     typeof name !== 'string' ||
     name.length > 64 ||
-    typeof player !== 'number' ||
-    typeof cpu !== 'number' ||
+    typeof points !== 'number' ||
     typeof durationMs !== 'number'
   ) {
     throw fail(400, 'bad_request');
   }
-  return { matchId, name, player, cpu, durationMs };
+  return { matchId, name, points, durationMs };
 }

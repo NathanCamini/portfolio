@@ -108,3 +108,15 @@
     min-height: 460px;
   }
 }
+
+.modes {
+  font-size: 13px;
+}
+
+/* The boss fight: the whole panel glows red. */
+.panel.boss {
+  box-shadow:
+    0 0 0 1px #8b1e1e,
+    0 0 36px rgba(229, 56, 59, 0.35);
+  transition: box-shadow 0.6s;
+}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CPU_SPEED, FIELD, TIMING } from './constants';
+import { botInput } from './bot';
+import { CPU, FIELD, TIMING } from './constants';
 import { createGame, primaryAction, stepGame } from './physics';
-import type { Input } from './types';
+import { nextStage, STAGES, type StageId } from './stages';
+import type { GameState, Input } from './types';
 
 const idle: Input = { left: false, right: false, jump: false };
 const seeded =
@@ -9,13 +11,20 @@ const seeded =
   () =>
     ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
-function play(g: ReturnType<typeof createGame>, seconds: number, input: Input = idle, rng = seeded()) {
+function play(g: GameState, seconds: number, input: Input = idle, rng = seeded()) {
   for (let t = 0; t < seconds; t += TIMING.STEP) stepGame(g, TIMING.STEP, input, rng);
+}
+
+/** Ends the current match as if the rally had just been decided with this score. */
+function finish(g: GameState, score: [number, number]) {
+  Object.assign(g, { score, phase: 'point', phaseTime: TIMING.POINT_PAUSE_MS, lastScorer: 0 });
+  stepGame(g, TIMING.STEP, idle, seeded());
+  expect(g.phase).toBe('over');
 }
 
 describe('beach volleyball engine', () => {
   it('starts on the title screen and serves on the primary action', () => {
-    const g = createGame(CPU_SPEED.normal, 7, seeded());
+    const g = createGame('easy', seeded());
     expect(g.phase).toBe('title');
     primaryAction(g);
     expect(g.phase).toBe('serve');
@@ -23,7 +32,7 @@ describe('beach volleyball engine', () => {
   });
 
   it('drops the serve after the timeout and the rally goes live', () => {
-    const g = createGame(CPU_SPEED.normal, 7, seeded());
+    const g = createGame('endless', seeded());
     primaryAction(g);
     // Move the player away so they don't touch the hovering ball.
     play(g, 0.5, { ...idle, left: true });
@@ -33,7 +42,7 @@ describe('beach volleyball engine', () => {
   });
 
   it('awards the point to the CPU when the ball lands on the player side', () => {
-    const g = createGame(CPU_SPEED.normal, 7, seeded());
+    const g = createGame('endless', seeded());
     primaryAction(g);
     play(g, 3, { ...idle, left: true }); // player hides in the corner, ball drops on their side
     expect(g.score).toEqual([0, 1]);
@@ -41,25 +50,27 @@ describe('beach volleyball engine', () => {
     expect(g.server).toBe(1);
   });
 
-  it('keeps the players on their own side of the net', () => {
-    const g = createGame(CPU_SPEED.hard, 7, seeded());
+  it('keeps the players on their own side of the net, the bigger boss included', () => {
+    const g = createGame('boss', seeded());
     primaryAction(g);
     play(g, 5, { ...idle, right: true });
+    expect(g.cpu.r).toBe(CPU.boss.radius);
     expect(g.player.x + g.player.r).toBeLessThanOrEqual(FIELD.NET_X - FIELD.NET_W / 2 + 1e-9);
     expect(g.cpu.x - g.cpu.r).toBeGreaterThanOrEqual(FIELD.NET_X + FIELD.NET_W / 2 - 1e-9);
   });
 
-  it('ends the match at the win score', () => {
-    const g = createGame(CPU_SPEED.normal, 2, seeded());
+  it('ends a campaign match when either side reaches 7', () => {
+    const g = createGame('easy', seeded());
     primaryAction(g);
-    play(g, 12, { ...idle, left: true });
+    play(g, 60, { ...idle, left: true });
     expect(g.phase).toBe('over');
-    expect(g.score[1]).toBe(2);
+    expect(g.score[1]).toBe(7);
+    expect(g.score[0]).toBeLessThan(7); // phase 1's CPU botches a few of its own balls
   });
 
   it('is deterministic for the same inputs (fixed timestep + seeded AI)', () => {
-    const a = createGame(CPU_SPEED.normal, 7, seeded(7));
-    const b = createGame(CPU_SPEED.normal, 7, seeded(7));
+    const a = createGame('easy', seeded(7));
+    const b = createGame('easy', seeded(7));
     primaryAction(a);
     primaryAction(b);
     play(a, 4, { ...idle, right: true }, seeded(3));
@@ -67,4 +78,87 @@ describe('beach volleyball engine', () => {
     expect(a.ball).toEqual(b.ball);
     expect(a.score).toEqual(b.score);
   });
+});
+
+describe('campaign and endless', () => {
+  it('only a win in phase 1 leads to the boss; losing replays the same phase', () => {
+    const g = createGame('easy', seeded());
+    primaryAction(g);
+    finish(g, [5, 7]);
+    primaryAction(g);
+    expect([g.stage.id, g.phase]).toEqual(['easy', 'serve']);
+
+    finish(g, [7, 5]);
+    primaryAction(g); // to the boss's title screen, not straight into a match
+    expect([g.stage.id, g.phase]).toEqual(['boss', 'title']);
+    expect(g.stage.theme).toBe('inferno');
+
+    primaryAction(g);
+    finish(g, [2, 7]);
+    primaryAction(g);
+    expect([g.stage.id, g.phase]).toEqual(['boss', 'serve']);
+  });
+
+  it('beating the boss ends the campaign on a rematch', () => {
+    expect(nextStage('boss', true)).toBe('boss');
+    expect(nextStage('endless', false)).toBe('endless');
+  });
+
+  it('endless has no limit for the player and ends when the CPU reaches 7', () => {
+    const g = createGame('endless', seeded());
+    primaryAction(g);
+    Object.assign(g, { score: [12, 6], phase: 'point', phaseTime: TIMING.POINT_PAUSE_MS, lastScorer: 0 });
+    stepGame(g, TIMING.STEP, idle, seeded());
+    expect(g.phase).toBe('serve');
+    finish(g, [12, 7]);
+    primaryAction(g);
+    expect([g.stage.id, g.phase, g.score]).toEqual(['endless', 'serve', [0, 0]]);
+  });
+
+  it('endless is played against the original CPU', () => {
+    expect(STAGES.endless.cpu).toEqual({
+      speed: 5.4,
+      jump: -12.5,
+      jumpChance: 0.08,
+      offset: 16,
+      misreadChance: 0,
+      misread: 0,
+      radius: 44,
+      spike: 0,
+    });
+  });
+});
+
+describe('difficulty', () => {
+  // The same stand-in player against each CPU, over seeded first-to-7 matches.
+  function share(stage: StageId, profile: keyof typeof CPU, matches = 12) {
+    let won = 0;
+    let points = 0;
+    let conceded = 0;
+    for (let i = 0; i < matches; i++) {
+      const g = createGame(stage, seeded(i + 1));
+      g.stage = { ...g.stage, cpu: CPU[profile], limits: [7, 7] };
+      g.cpu.r = CPU[profile].radius;
+      primaryAction(g);
+      const rng = seeded(1000 + i);
+      const bot = seeded(5000 + i);
+      for (let t = 0; g.phase !== 'over' && t < 1800; t += TIMING.STEP) {
+        stepGame(g, TIMING.STEP, botInput(g, TIMING.STEP * 60, bot), rng);
+      }
+      if (g.score[0] > g.score[1]) won++;
+      points += g.score[0];
+      conceded += g.score[1];
+    }
+    return { wins: won / matches, points: points / (points + conceded) };
+  }
+
+  it('phase 1 is easier than the original CPU, and the boss is almost unbeatable', () => {
+    const easy = share('easy', 'easy');
+    const normal = share('endless', 'normal');
+    const boss = share('boss', 'boss');
+    expect(easy.points).toBeGreaterThan(normal.points + 0.15);
+    expect(boss.points).toBeLessThan(normal.points - 0.15);
+    expect(boss.wins).toBeLessThan(0.1);
+    expect(boss.points).toBeGreaterThan(0.1); // hard, not literally impossible: points still happen
+  }, 30_000);
 });

@@ -1,13 +1,13 @@
 import { updateCpu } from './ai';
 import { FIELD, PHYSICS, TIMING } from './constants';
+import { nextStage, STAGES, type StageId } from './stages';
 import type { Body, GameState, Input, Side } from './types';
 
-export function createGame(cpuSpeed: number, winScore: number, rng: () => number = Math.random): GameState {
+export function createGame(stage: StageId, rng: () => number = Math.random): GameState {
   const { GROUND, PLAYER_HOME, CPU_HOME, SERVE_Y, W } = FIELD;
-  const r = PHYSICS.PLAYER_RADIUS;
-  return {
-    player: { x: PLAYER_HOME, y: GROUND, vx: 0, vy: 0, r },
-    cpu: { x: CPU_HOME, y: GROUND, vx: 0, vy: 0, r },
+  const g: GameState = {
+    player: { x: PLAYER_HOME, y: GROUND, vx: 0, vy: 0, r: PHYSICS.PLAYER_RADIUS },
+    cpu: { x: CPU_HOME, y: GROUND, vx: 0, vy: 0, r: PHYSICS.PLAYER_RADIUS },
     ball: { x: PLAYER_HOME, y: SERVE_Y, vx: 0, vy: 0, r: PHYSICS.BALL_RADIUS },
     score: [0, 0],
     phase: 'title',
@@ -16,14 +16,42 @@ export function createGame(cpuSpeed: number, winScore: number, rng: () => number
     matchTime: 0,
     server: 0,
     lastScorer: null,
-    cpuSpeed,
-    winScore,
+    stage: STAGES[stage],
+    ballSide: 0,
+    cpuMiss: 0,
     stars: Array.from({ length: 40 }, () => [rng() * W, rng() * 300, rng() * 1.4 + 0.4] as [number, number, number]),
   };
+  setStage(g, stage);
+  return g;
 }
 
-/** Click / space / "jump" button: starts a match from the title or game-over screen. */
+/** Switches to another stage's title screen (mode change, or the next campaign phase). */
+export function setStage(g: GameState, id: StageId) {
+  g.stage = STAGES[id];
+  g.cpu.r = g.stage.cpu.radius;
+  Object.assign(g.player, { x: FIELD.PLAYER_HOME, y: FIELD.GROUND, vx: 0, vy: 0 });
+  Object.assign(g.cpu, { x: FIELD.CPU_HOME, y: FIELD.GROUND, vx: 0, vy: 0 });
+  Object.assign(g.ball, { x: FIELD.PLAYER_HOME, y: FIELD.SERVE_Y, vx: 0, vy: 0 });
+  g.score = [0, 0];
+  g.matchTime = 0;
+  g.lastScorer = null;
+  g.phase = 'title';
+  g.phaseTime = 0;
+}
+
+/** The player reached their limit (never happens in Endless, which has none). */
+export const playerWon = (g: GameState) => g.score[0] >= g.stage.limits[0];
+
+/**
+ * Click / space / "jump" button. On the title screen it starts the match; on
+ * the game-over screen it either moves to the next campaign phase's title
+ * (after winning phase 1) or starts the same stage again.
+ */
 export function primaryAction(g: GameState) {
+  if (g.phase === 'over') {
+    const next = nextStage(g.stage.id, playerWon(g));
+    if (next !== g.stage.id) return setStage(g, next);
+  }
   if (g.phase === 'title' || g.phase === 'over') {
     g.score = [0, 0];
     g.matchTime = 0;
@@ -85,6 +113,16 @@ function collidePlayer(b: Body, p: Body): boolean {
   return true;
 }
 
+/** The boss's touch: the ball leaves faster, towards the player's side. */
+function spike(b: Body, extra: number) {
+  b.vx -= extra;
+  const speed = Math.hypot(b.vx, b.vy);
+  if (speed > PHYSICS.MAX_BALL_SPEED) {
+    b.vx *= PHYSICS.MAX_BALL_SPEED / speed;
+    b.vy *= PHYSICS.MAX_BALL_SPEED / speed;
+  }
+}
+
 /** Ball vs. net (axis-aligned rectangle): closest-point test, then reflect. */
 function collideNet(b: Body) {
   const { NET_X, NET_W, NET_TOP, GROUND } = FIELD;
@@ -140,7 +178,7 @@ export function stepGame(g: GameState, dt: number, input: Input, rng: () => numb
   if (g.phase === 'point') {
     g.phaseTime += ms;
     if (g.phaseTime > TIMING.POINT_PAUSE_MS) {
-      if (Math.max(...g.score) >= g.winScore) g.phase = 'over';
+      if (g.score[0] >= g.stage.limits[0] || g.score[1] >= g.stage.limits[1]) g.phase = 'over';
       else serve(g, g.server);
     }
     return;
@@ -161,7 +199,7 @@ export function stepGame(g: GameState, dt: number, input: Input, rng: () => numb
   }
   collideNet(b);
   collidePlayer(b, p);
-  collidePlayer(b, c);
+  if (collidePlayer(b, c) && g.stage.cpu.spike) spike(b, g.stage.cpu.spike);
 
   // Ball touched the sand: the side it landed on loses the rally.
   if (b.y + b.r >= GROUND) {

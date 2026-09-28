@@ -58,16 +58,10 @@
   color: var(--color-neutral-400);
 }
 
-.points {
-  margin: 0 0 4px;
-  color: var(--color-neutral-300);
-}
-
-.points strong {
-  color: var(--color-accent-300);
+.unit {
   font-size: 18px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  color: var(--color-accent-300);
 }
 
 /* ---- name form ---- */
