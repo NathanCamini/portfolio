@@ -192,6 +192,8 @@ export interface Dictionary {
     loading: string;
     error: string;
     canvasLabel: string;
+    /** Copy for the neon line-art version (carConfig.mode = 'neon'). */
+    neon: { title: string; body: string; hint: string; label: string; speed: string };
   };
   volleyball: {
     label: string;

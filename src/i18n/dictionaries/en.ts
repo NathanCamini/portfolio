@@ -186,6 +186,13 @@ export const en: Dictionary = {
     loading: 'Loading Three.js…',
     error: 'WebGL could not be loaded.',
     canvasLabel: '3D Porsche 911 GT3 RS. Scroll the page to move it and drag to rotate it.',
+    neon: {
+      title: 'A neon 911 GT3 RS that accelerates with the scroll.',
+      body: 'Scroll the page: it draws itself line by line, speeds up and crosses the screen. The faster you scroll, the faster it goes — the speedometer doesn’t lie.',
+      hint: 'Scroll faster to accelerate',
+      label: 'Neon line drawing of a Porsche 911 GT3 RS in profile, moving with the page scroll.',
+      speed: 'speed',
+    },
   },
   volleyball: {
     label: 'Beach volleyball',

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useInView, useScroll } from 'motion/react';
+import { NeonCar } from '@/components/car/NeonCar';
 import { Reveal } from '@/components/motion/Reveal';
 import { carConfig } from '@/config/site';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -14,7 +15,8 @@ const CarCanvas = dynamic(() => import('@/components/three/CarCanvas'), { ssr: f
 type Status = 'idle' | 'ready' | 'error';
 
 /**
- * Cars — 3D car. A 300vh section whose inner 100vh stage is `position: sticky`:
+ * Cars. `carConfig.mode` picks the visual: 'neon' (SVG line art, the default)
+ * or '3d' (the Three.js model, kept in the codebase but hidden). A 300vh section whose inner 100vh stage is `position: sticky`:
  * while the page scrolls through the section, the stage stays pinned and the
  * scroll distance is converted into a 0→1 progress value that drives the car.
  */
@@ -34,11 +36,14 @@ export function CarShowcase() {
 
   const onReady = useCallback(() => setStatus('ready'), []);
   const onError = useCallback(() => setStatus('error'), []);
+  const neon = carConfig.mode === 'neon';
+  const copy = neon ? t.car.neon : t.car;
 
   return (
     <section id="carro" ref={sectionRef} className={styles.section} aria-labelledby="car-title">
       <div className={styles.stage}>
-        {near && status !== 'error' && (
+        {neon && <NeonCar progress={scrollYProgress} label={t.car.neon.label} speedLabel={t.car.neon.speed} />}
+        {!neon && near && status !== 'error' && (
           <CarCanvas
             progress={scrollYProgress}
             active={visible}
@@ -55,22 +60,24 @@ export function CarShowcase() {
           <div className={styles.copy}>
             <Reveal className="eyebrow-muted path">{t.car.label}</Reveal>
             <Reveal as="h3" delay={80} id="car-title" className="sub-title">
-              {t.car.title}
+              {copy.title}
             </Reveal>
             <Reveal as="p" delay={140} className={styles.body}>
-              {t.car.body}
+              {copy.body}
             </Reveal>
           </div>
 
           <div className={styles.footer}>
             <div className={styles.status}>
-              <span className="tag tag-outline">{t.car.hint}</span>
-              {status === 'idle' && <span className={styles.muted}>{t.car.loading}</span>}
-              {status === 'error' && <span className={styles.muted}>{t.car.error}</span>}
+              <span className="tag tag-outline">{copy.hint}</span>
+              {!neon && status === 'idle' && <span className={styles.muted}>{t.car.loading}</span>}
+              {!neon && status === 'error' && <span className={styles.muted}>{t.car.error}</span>}
             </div>
-            <code ref={readoutRef} className={styles.readout} aria-hidden="true">
-              scroll 0% → track.x 0.00m · spin.y -18°
-            </code>
+            {!neon && (
+              <code ref={readoutRef} className={styles.readout} aria-hidden="true">
+                scroll 0% → track.x 0.00m · spin.y -18°
+              </code>
+            )}
           </div>
         </div>
       </div>
