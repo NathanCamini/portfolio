@@ -1,3 +1,5 @@
+import type { GameId } from '@/lib/ranking/contract';
+
 /**
  * Shape of a translation dictionary. Every locale file must satisfy this
  * interface, so a missing key is a type error instead of a blank on the page.
@@ -78,15 +80,13 @@ export interface GameStrings {
   again: string;
 }
 
-/** Global leaderboard: the name form after a match and the top 10 board. */
+/** Global ranking, shared by every game: the name form after a run and the top 10 boards. */
 export interface RankingStrings {
   button: string;
   title: string;
-  subtitle: string;
-  /** Overlay kicker when an Endless run ends. */
-  runOver: string;
   points: string;
-  scoreHelp: string;
+  /** Per game: board tab, board subtitle, headline when a run ends, how the score works. */
+  games: Record<GameId, { tab: string; subtitle: string; runOver: string; scoreHelp: string }>;
   nameLabel: string;
   namePlaceholder: string;
   save: string;
@@ -209,7 +209,6 @@ export interface Dictionary {
     /** Toolbar switch between the campaign and Endless. */
     mode: { label: string; campaign: string; endless: string };
     game: GameStrings;
-    ranking: RankingStrings;
   };
   games: {
     label: string;
@@ -224,6 +223,7 @@ export interface Dictionary {
     canvasLabel: string;
     trainer: TrainerStrings;
   };
+  ranking: RankingStrings;
   contact: {
     label: string;
     title: string;

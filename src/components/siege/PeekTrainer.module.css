@@ -18,3 +18,20 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* The ranking card needs more room than the 16:9 court: the paused canvas letterboxes behind it. */
+.stage.withOverlay {
+  aspect-ratio: auto;
+  min-height: 460px;
+}
+
+.bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.rankingBtn {
+  padding: 7px 12px;
+  font-size: 13px;
+}
