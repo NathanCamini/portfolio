@@ -27,6 +27,8 @@ export interface GameState {
   phaseTime: number;
   /** frames since start — drives idle animations (stars, waves, ball spin) */
   clock: number;
+  /** ms of play since the first serve of the current match (stops at the final whistle) */
+  matchTime: number;
   server: Side;
   lastScorer: Side | null;
   cpuSpeed: number;

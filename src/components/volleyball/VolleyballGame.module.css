@@ -99,3 +99,12 @@
     aspect-ratio: 16 / 9;
   }
 }
+
+/* Leaderboard open on a phone: the 16:9 court is too short for the form and the
+   top 10, so the stage grows (the paused court letterboxes behind the overlay). */
+@media (max-width: 640px) {
+  .panel.withOverlay:not(:fullscreen) .stage {
+    aspect-ratio: auto;
+    min-height: 460px;
+  }
+}

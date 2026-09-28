@@ -7,6 +7,7 @@ import { CPU_SPEED, TIMING, type CpuLevel } from './engine/constants';
 import { createGame, primaryAction, stepGame } from './engine/physics';
 import { renderGame, type View } from './engine/render';
 import type { GameState, Input } from './engine/types';
+import type { MatchResult } from './ranking/match';
 
 export type GameKey = keyof Input;
 
@@ -30,6 +31,12 @@ interface Options {
   strings: GameStrings;
   cpuLevel: CpuLevel;
   winScore: number;
+  /** An overlay (leaderboard) is open: simulation paused, keys left to the page, no new match. */
+  locked: boolean;
+  /** A new match just kicked off. */
+  onKickoff: () => void;
+  /** The final whistle, with the scoreline and the engine's match clock. */
+  onFinish: (result: MatchResult) => void;
 }
 
 /**
@@ -41,15 +48,44 @@ interface Options {
  * - Game state and input live in refs: 60+ updates/s never touch React.
  * - Keyboard is only captured while the panel is on screen (or fullscreen),
  *   so arrows/space keep scrolling the page everywhere else.
+ * - Kickoff and final whistle are reported to the caller (ranking tickets).
  */
-export function useVolleyballGame({ canvasRef, stageRef, panelRef, strings, cpuLevel, winScore }: Options) {
+export function useVolleyballGame({
+  canvasRef,
+  stageRef,
+  panelRef,
+  strings,
+  cpuLevel,
+  winScore,
+  locked,
+  onKickoff,
+  onFinish,
+}: Options) {
   const game = useRef<GameState | null>(null);
   const input = useRef<Input>({ left: false, right: false, jump: false });
   const stringsRef = useRef(strings);
+  const lockedRef = useRef(locked);
+  const events = useRef({ onKickoff, onFinish });
 
   useEffect(() => {
     stringsRef.current = strings; // language switch mid-match updates the canvas copy
   }, [strings]);
+
+  useEffect(() => {
+    lockedRef.current = locked;
+    if (locked) Object.assign(input.current, { left: false, right: false, jump: false });
+  }, [locked]);
+
+  useEffect(() => {
+    events.current = { onKickoff, onFinish };
+  });
+
+  /** Primary action, reporting a kickoff when it starts a match. */
+  const kick = useCallback((g: GameState) => {
+    const before = g.phase;
+    primaryAction(g);
+    if (g.phase !== before) events.current.onKickoff();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -89,10 +125,14 @@ export function useVolleyballGame({ canvasRef, stageRef, panelRef, strings, cpuL
       const dt = Math.min((now - last) / 1000, TIMING.MAX_FRAME);
       last = now;
       if (!visible) return;
-      acc += dt;
+      if (!lockedRef.current) acc += dt;
+      const before = g.phase;
       while (acc >= TIMING.STEP) {
         stepGame(g, TIMING.STEP, input.current);
         acc -= TIMING.STEP;
+      }
+      if (before !== 'over' && g.phase === 'over') {
+        events.current.onFinish({ player: g.score[0], cpu: g.score[1], durationMs: Math.round(g.matchTime) });
       }
       renderGame(ctx, g, view, palette, stringsRef.current);
     };
@@ -104,14 +144,14 @@ export function useVolleyballGame({ canvasRef, stageRef, panelRef, strings, cpuL
       return !!r && r.bottom >= 80 && r.top <= window.innerHeight - 80;
     };
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || lockedRef.current) return;
       const k = KEYMAP[e.key];
       if (!k || !panelActive()) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
       e.preventDefault(); // no page scroll / button activation while playing
       input.current[k] = down;
-      if (down && k === 'jump' && !e.repeat) primaryAction(g);
+      if (down && k === 'jump' && !e.repeat) kick(g);
     };
     const onKeyDown = onKey(true);
     const onKeyUp = onKey(false);
@@ -130,18 +170,26 @@ export function useVolleyballGame({ canvasRef, stageRef, panelRef, strings, cpuL
       window.removeEventListener('blur', onBlur);
       game.current = null;
     };
-  }, [canvasRef, stageRef, panelRef, cpuLevel, winScore]);
+  }, [canvasRef, stageRef, panelRef, cpuLevel, winScore, kick]);
 
-  const press = useCallback((k: GameKey) => {
-    input.current[k] = true;
-    if (k === 'jump' && game.current) primaryAction(game.current);
-  }, []);
+  const press = useCallback(
+    (k: GameKey) => {
+      if (lockedRef.current) return;
+      input.current[k] = true;
+      if (k === 'jump' && game.current) kick(game.current);
+    },
+    [kick],
+  );
   const release = useCallback((k: GameKey) => {
     input.current[k] = false;
   }, []);
   const action = useCallback(() => {
-    if (game.current) primaryAction(game.current);
-  }, []);
+    if (!lockedRef.current && game.current) kick(game.current);
+  }, [kick]);
+  /** "Play again" from the overlay: starts a match even though the overlay is still closing. */
+  const restart = useCallback(() => {
+    if (game.current) kick(game.current);
+  }, [kick]);
 
-  return { press, release, action };
+  return { press, release, action, restart };
 }

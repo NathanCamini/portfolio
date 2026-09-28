@@ -1,17 +1,38 @@
-// Cloudflare Workers — static assets only (no Worker script runs).
-// `npm run deploy` builds the static export into ./out and uploads it.
+// Cloudflare Workers: the static export (./out) plus a small Worker for the
+// volleyball ranking API. `npm run deploy` builds the site and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nathan-camini-portfolio",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./out",
+    "binding": "ASSETS",
+    // Only the API reaches the Worker; pages and files are served straight from the assets.
+    "run_worker_first": ["/api/*"],
     // /pt → out/pt.html, /pt/ → 307 /pt
     "html_handling": "drop-trailing-slash",
     // Unknown paths get out/404.html with a real 404 status.
     "not_found_handling": "404-page",
   },
+  // Global leaderboard. No database_id: the first `wrangler deploy` creates the
+  // database by name (and reuses it afterwards); the Worker creates the tables
+  // from migrations/ on first use.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "portfolio-ranking",
+      "migrations_dir": "migrations",
+    },
+  ],
+  // Per-IP limits (a match lasts at least ~15 s, so 6 kickoffs a minute is plenty).
+  "ratelimits": [
+    { "name": "KICKOFF_LIMIT", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
+    { "name": "SUBMIT_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+  ],
   // Required by `wrangler preview`, which Cloudflare's Git integration runs for
-  // non-production branches. Empty = reuse the top-level settings above.
+  // non-production branches. Bindings aren't inherited here, so previews have no
+  // database: the game works and the ranking shows as unavailable, which keeps
+  // test runs out of the real leaderboard.
   "previews": {},
 }

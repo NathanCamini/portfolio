@@ -65,6 +65,43 @@ export interface GameStrings {
   again: string;
 }
 
+/** Global leaderboard: the name form after a match and the top 10 board. */
+export interface RankingStrings {
+  button: string;
+  title: string;
+  subtitle: string;
+  points: string;
+  scoreHelp: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  save: string;
+  saving: string;
+  skip: string;
+  again: string;
+  close: string;
+  loading: string;
+  empty: string;
+  /** `{n}` = position on the board. */
+  position: string;
+  newBest: string;
+  /** `{best}` = the player's standing record. */
+  keptBest: string;
+  noPoints: string;
+  offline: string;
+  errors: {
+    length: string;
+    chars: string;
+    letters: string;
+    reserved: string;
+    offensive: string;
+    /** The server's anti-cheat checks refused the match. */
+    rejected: string;
+    expired: string;
+    rateLimited: string;
+    unavailable: string;
+  };
+}
+
 /** Copy drawn inside the Siege-style aim trainer canvas. */
 export interface TrainerStrings {
   title: string;
@@ -156,6 +193,7 @@ export interface Dictionary {
     fab: string;
     teaserAlt: string;
     game: GameStrings;
+    ranking: RankingStrings;
   };
   games: {
     label: string;

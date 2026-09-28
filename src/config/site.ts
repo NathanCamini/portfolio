@@ -26,8 +26,4 @@ export const carConfig: { color: string; finish: 'metallic' | 'solid' } = {
   finish: 'solid',
 };
 
-/** Mini-game difficulty: CPU top speed. */
-export const gameConfig = {
-  cpuLevel: 'normal' as 'easy' | 'normal' | 'hard',
-  winScore: 7,
-};
+// Volleyball difficulty and win score live in ./game.ts (shared with the ranking Worker).

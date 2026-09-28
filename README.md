@@ -2,23 +2,34 @@
 
 Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
 biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
-pelo scroll, um **mini-jogo de vôlei de praia** e um **Peek Trainer** no estilo Rainbow Six Siege.
+pelo scroll, um **mini-jogo de vôlei de praia com ranking global** (Cloudflare Workers + D1) e um **Peek Trainer** no
+estilo Rainbow Six Siege.
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000 → abre em /pt ou /en conforme o idioma do sistema
 npm run check      # typecheck + lint + testes
-npm run preview    # build estático + servidor local da Cloudflare (wrangler) em :8787
+npm run preview    # build estático + Worker e D1 locais (wrangler) em :8787 — o ranking funciona aqui
 npm run deploy     # build estático + publicação no Cloudflare Workers
+npm run db:migrate # aplica migrations/ no D1 de produção (só para mudanças futuras de schema)
 ```
 
-Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção.
+Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção. A única parte
+dinâmica é a API do ranking, um Worker pequeno em `worker/`. Com `npm run dev` o jogo funciona normalmente e o
+ranking aparece como indisponível (não há Worker); use `npm run preview` para testar o ranking.
 
 ## Deploy na Cloudflare
 
-O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker (sem código de servidor):
+O `wrangler.jsonc` publica `out/` como _static assets_ e o Worker `worker/index.ts`, que só recebe `/api/*`
+(`run_worker_first`) — páginas e arquivos continuam saindo direto dos assets, sem executar código:
 `/pt` → `pt.html`, barra final redirecionada, URLs desconhecidas → `404.html` com status 404. O arquivo
 `public/_headers` define cache de 1 ano para `/_next/static/*` (arquivos com hash) e headers de segurança básicos.
+
+**Banco do ranking (D1), sem passo manual.** O binding `DB` tem só `database_name` (`portfolio-ranking`): o primeiro
+`wrangler deploy` cria o banco na sua conta e os seguintes reaproveitam. As tabelas são criadas pelo próprio Worker
+na primeira requisição, a partir de `migrations/0001_volley_ranking.sql` (idempotente). Para mudanças futuras de
+schema, crie `migrations/0002_….sql` e rode `npm run db:migrate`. Deploys de _preview_ (branches) não recebem banco:
+o jogo funciona e o ranking aparece como indisponível, o que mantém testes fora do ranking real.
 
 **Pela linha de comando**
 
@@ -51,7 +62,8 @@ command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
 | `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
 | `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
 | `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
-| `wrangler`                                   | Preview local e deploy no Cloudflare Workers                                 |
+| Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP              |
+| `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers         |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
 Sem Tailwind e sem biblioteca de i18n: os tokens do design system vivem em `globals.css` (CSS Modules por seção)
@@ -68,7 +80,8 @@ src/
 │  ├─ global-not-found.tsx   # 404 bilíngue (out/404.html)
 │  ├─ globals.css            # tokens Nocturne + classes .btn/.card/.tag/.seg
 │  ├─ fonts.ts, sitemap.ts, robots.ts
-├─ config/site.ts            # nome, e-mail, redes, cor/acabamento do carro, dificuldade do jogo
+├─ config/site.ts            # nome, e-mail, redes, cor/acabamento do carro
+├─ config/game.ts            # dificuldade da CPU e pontos por partida (lido também pelo Worker)
 ├─ i18n/                     # config, detect (idioma do sistema), dicionários pt/en, I18nProvider
 ├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts
 ├─ hooks/                    # useTypewriter, useMediaQuery
@@ -86,8 +99,16 @@ src/
    ├─ siege/                 # Peek Trainer: engine (TS puro, testado), render, componente
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
-      ├─ useVolleyballGame.ts# loop de passo fixo, input, resize
+      ├─ ranking/            # regras do ranking compartilhadas com o Worker: nickname, pontuação, contrato da API
+      ├─ useVolleyballGame.ts# loop de passo fixo, input, resize, apito inicial/final
+      ├─ useRanking.ts       # ticket da partida → nome → salvar → ranking
+      ├─ RankingOverlay.tsx  # formulário do nome e top 10 sobre a quadra
       └─ VolleyballGame.tsx  # painel: toolbar, tela cheia, controles touch
+worker/
+├─ index.ts                  # API /api/volley/* (rotas, validação, rate limit)
+├─ store.ts                  # SQL do D1 (ranking por jogador, ticket de uso único)
+└─ test/                     # testes da API contra SQLite real (node:sqlite)
+migrations/                  # schema do D1
 ```
 
 ## Decisões de engenharia
@@ -112,6 +133,31 @@ causam nenhum re-render do React (Motion values e refs lidos no `useFrame`).
 sem a bola atravessar a rede), IA que prevê o ponto de queda, quadra lógica 960×540 com letterbox. O teclado só é
 capturado com o painel visível. Tela cheia pela Fullscreen API; controles touch em telas `pointer: coarse`.
 
+**Ranking global.** Três endpoints num Worker (`GET /api/volley/ranking`, `POST /api/volley/matches`,
+`POST /api/volley/scores`) sobre um D1. O top 10 mostra a **melhor partida de cada jogador** (nome sem diferenciar
+maiúsculas/acentos), com empate decidido por quem chegou primeiro — uma única query com `ROW_NUMBER()`.
+Pontuação: 100 por ponto feito, −20 por ponto sofrido, +500 pela vitória e até +300 por vencer rápido.
+
+Validação contra trapaça, em camadas:
+
+- **O cliente nunca envia a pontuação.** Envia só o placar e o relógio da partida; o Worker recalcula os pontos.
+- **Placar possível:** exatamente um lado com 7 pontos, inteiros, e nenhum 0 × 7 (vale 0 ponto).
+- **Tempo mínimo por ponto**, derivado das próprias constantes do motor (a bola paira 900 ms no saque e há 1,2 s de
+  pausa após cada ponto): 7 × 0 em 5 s é recusado.
+- **Relógio do servidor:** no apito inicial o jogo pede um _ticket_ (UUID aleatório). Na hora de salvar, a duração
+  informada não pode passar do tempo que o servidor viu desde a emissão do ticket (+5 s de folga de rede).
+- **Um ticket, uma pontuação:** o insert e o consumo do ticket acontecem na mesma transação (batch do D1), com
+  `UNIQUE(match_id)` de reserva — reenviar a requisição não duplica a pontuação. Tickets expiram em 1 h.
+- **Rate limiting** por IP (binding nativo da Cloudflare): 6 partidas e 10 envios por minuto.
+- **Nome:** 3–16 caracteres, só letras latinas, números, espaço, `_` e `-`; nomes reservados (admin, CPU…) e
+  palavrões/ofensas em PT e EN recusados mesmo disfarçados (maiúsculas, acentos, leetspeak `p0rr4`, separadores
+  `f-u-c-k`, letras esticadas, letras full-width). O filtro roda no navegador (feedback imediato, sem requisição) e de
+  novo no Worker; um nome recusado **não deixa salvar** e mostra o erro, sem gastar o ticket.
+
+Isso barra adulteração casual (editar a requisição no DevTools, repetir o POST, inventar placar). Não é prova de
+partida real: quem se dedicar ainda consegue forjar um resultado _plausível_. O próximo passo seria o servidor
+re-simular a partida a partir dos inputs gravados — o motor é TypeScript puro e determinístico, então pode rodar no Worker.
+
 **i18n.** `/pt` e `/en` são pré-renderizados (SEO + hreflang; `x-default` aponta para `/`, que detecta o idioma
 do sistema). A troca de idioma é estado no cliente + `history.replaceState`: o texto muda na hora e **nada remonta**
 — a partida e a posição do carro continuam.
@@ -122,5 +168,7 @@ teclado (setas / Home), texto do terminal de IA exposto por inteiro a leitores d
 ## Personalização
 
 - Textos: `src/i18n/dictionaries/pt.ts` e `en.ts` (os `[colchetes]` são placeholders do design).
-- Contato, cor/acabamento do carro, dificuldade da CPU: `src/config/site.ts`.
+- Contato, cor/acabamento do carro: `src/config/site.ts`. Dificuldade da CPU e pontos por partida:
+  `src/config/game.ts` (mudar isso muda o significado das pontuações: comece um ranking novo).
+- Lista de palavras bloqueadas nos nomes: `src/components/volleyball/ranking/nickname.ts`.
 - Cores: tokens em `src/app/globals.css` — o canvas do jogo e a cena 3D leem os mesmos tokens.

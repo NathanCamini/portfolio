@@ -1,0 +1,10 @@
+{
+  // Tests run on Node (vitest + node:sqlite), so they get Node's types on top
+  // of the Worker's; the Worker source itself is checked without them.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": ["./**/*.ts", "../*.ts"],
+  "exclude": []
+}
