@@ -10,10 +10,8 @@ export const pt: Dictionary = {
   },
   nav: { bio: 'Biografia', projects: 'Projetos', hobbies: 'Hobbies', contact: 'Contato', language: 'Idioma' },
   hero: {
-    tag1: 'Back-end · APIs & sistemas',
-    tag2: 'Pós em IA & MLOps',
     titleLead: 'Construo sistemas que',
-    titleWords: ['aguentam o tranco.', 'escalam sem drama.', 'não caem às 3h.', 'fazem o front sorrir.'],
+    titleWords: ['aguentam o tranco.', 'escalam sem drama.', 'não caem às 3h da manhã.', 'fazem o front sorrir.'],
     sub: 'Desenvolvedor de software na Tramontina, formado em Análise e Desenvolvimento de Sistemas e pós-graduando em Engenharia de IA e MLOps. No dia a dia: APIs, sistemas legados e integrações. Aqui, o playground: abra o terminal, role a página, arraste o carro, jogue uma partida.',
     cta1: 'Ver projetos',
     cta2: 'Abrir terminal',

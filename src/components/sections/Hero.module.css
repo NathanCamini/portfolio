@@ -33,7 +33,7 @@
   width: 100%;
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: calc(var(--nav-h) + 48px) var(--gutter) 72px;
+  padding: calc(var(--nav-h) + 88px) var(--gutter) 72px;
   /* The copy is stacked above the sticker layer and spans the whole hero: let the
      pointer through to the stickers (hover wobble, the DELETE one's click), except
      on the CTAs. The hero text isn't selectable anyway. */
@@ -43,13 +43,6 @@
 .inner a,
 .inner button {
   pointer-events: auto;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 28px;
 }
 
 .title {
@@ -183,8 +176,7 @@
   font-family: var(--font-heading);
   gap: 10px;
   border-color: color-mix(in srgb, #7ee2a8 45%, transparent);
-  /* No negative spread: that shrinks the glow and leaves the rounded corners bare. */
-  box-shadow: 0 0 18px color-mix(in srgb, #7ee2a8 22%, transparent);
+  box-shadow: 0 0 24px -8px color-mix(in srgb, #7ee2a8 60%, transparent);
   transition:
     box-shadow 0.2s,
     border-color 0.2s,
@@ -193,7 +185,7 @@
 
 .termBtn:hover {
   border-color: #7ee2a8;
-  box-shadow: 0 0 26px color-mix(in srgb, #7ee2a8 38%, transparent);
+  box-shadow: 0 0 32px -6px color-mix(in srgb, #7ee2a8 70%, transparent);
 }
 
 .termIcon {

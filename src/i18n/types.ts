@@ -139,8 +139,6 @@ export interface Dictionary {
   };
   nav: { bio: string; projects: string; hobbies: string; contact: string; language: string };
   hero: {
-    tag1: string;
-    tag2: string;
     /** Fixed start of the headline… */
     titleLead: string;
     /** …followed by endings that rotate with a letter-by-letter animation. */
