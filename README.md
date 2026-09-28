@@ -1,7 +1,7 @@
 # Nathan Camini — Portfólio
 
 Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
-biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em neon** guiado
+biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
 pelo scroll, um **mini-jogo de vôlei de praia** (campanha com chefe + modo endless) e um **Peek Trainer** no
 estilo Rainbow Six Siege — os dois com um **ranking global compartilhado** (Cloudflare Workers + D1).
 
@@ -94,17 +94,17 @@ em dobro.
 
 ## Stack
 
-| Pacote                                       | Papel                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------- |
-| `next` 16 (App Router)                       | Export estático de `/pt` e `/en`, metadata/SEO                                  |
-| `react` 19                                   | UI                                                                              |
-| `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão    |
-| `three` + `@react-three/fiber` 9             | Versão 3D do carro (desligada: `carConfig.mode = '3d'` em `src/config/site.ts`) |
-| `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                          |
-| `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                    |
-| Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP                 |
-| `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers            |
-| `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                       |
+| Pacote                                       | Papel                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `next` 16 (App Router)                       | Export estático de `/pt` e `/en`, metadata/SEO                               |
+| `react` 19                                   | UI                                                                           |
+| `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
+| `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
+| `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
+| `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                 |
+| Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP              |
+| `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers         |
+| `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
 Sem Tailwind e sem biblioteca de i18n: os tokens do design system vivem em `globals.css` (CSS Modules por seção)
 e as traduções são objetos TypeScript tipados.
