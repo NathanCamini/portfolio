@@ -6,6 +6,7 @@ export const en: Dictionary = {
     title: 'Nathan Camini — Back-end developer',
     description:
       'Portfolio of Nathan Camini: software developer at Tramontina, with a degree in Systems Analysis and Development (IFRS), now in graduate school for AI Engineering and MLOps (PUC Minas). APIs, legacy systems, a 3D 911 GT3 RS and two mini-games.',
+    ogLine: 'Tramontina · IFRS · Grad school in AI & MLOps (PUC Minas)',
   },
   nav: { bio: 'Bio', projects: 'Projects', hobbies: 'Hobbies', contact: 'Contact', language: 'Language' },
   hero: {

@@ -7,3 +7,11 @@
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+# Link-preview images (src/app/[lang]/opengraph-image.tsx) are exported without an extension.
+/pt/opengraph-image
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+/en/opengraph-image
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400

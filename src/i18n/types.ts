@@ -131,7 +131,12 @@ export interface TrainerStrings {
 }
 
 export interface Dictionary {
-  meta: { title: string; description: string };
+  meta: {
+    title: string;
+    description: string;
+    /** Second line of the link-preview image (opengraph-image.tsx). */
+    ogLine: string;
+  };
   nav: { bio: string; projects: string; hobbies: string; contact: string; language: string };
   hero: {
     tag1: string;

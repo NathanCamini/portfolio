@@ -35,7 +35,9 @@ export async function generateMetadata({ params }: LayoutProps<'/[lang]'>): Prom
       url: `/${lang}`,
       siteName: site.name,
       locale: lang === 'pt' ? 'pt_BR' : 'en_US',
+      // og:image comes from ./opengraph-image.tsx (absolute via metadataBase = NEXT_PUBLIC_SITE_URL).
     },
+    twitter: { card: 'summary_large_image', title: t.meta.title, description: t.meta.description },
   };
 }
 

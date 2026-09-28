@@ -6,6 +6,7 @@ export const pt: Dictionary = {
     title: 'Nathan Camini — Desenvolvedor back-end',
     description:
       'Portfólio de Nathan Camini: desenvolvedor de software na Tramontina, formado em Análise e Desenvolvimento de Sistemas (IFRS) e pós-graduando em Engenharia de IA e MLOps (PUC Minas). APIs, sistemas legados, um 911 GT3 RS em 3D e dois mini-jogos.',
+    ogLine: 'Tramontina · IFRS · Pós em IA & MLOps (PUC Minas)',
   },
   nav: { bio: 'Biografia', projects: 'Projetos', hobbies: 'Hobbies', contact: 'Contato', language: 'Idioma' },
   hero: {
