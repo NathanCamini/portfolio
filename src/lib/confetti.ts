@@ -3,7 +3,7 @@ import { readPalette } from './palette';
 /**
  * Confetti burst in the design-system colours. `canvas-confetti` is imported
  * lazily (only when a burst actually fires) and skipped for users who prefer
- * reduced motion.
+ * reduced motion. Drawn above everything except the custom cursor, terminal included.
  */
 export async function celebrate(origin?: { x: number; y: number }, intensity = 1) {
   if (typeof window === 'undefined') return;
@@ -11,7 +11,7 @@ export async function celebrate(origin?: { x: number; y: number }, intensity = 1
   const { default: confetti } = await import('canvas-confetti');
   const C = readPalette();
   const colors = [C.accent, C.a300, C.n100, '#f5c542', '#3aa0ff'];
-  const base = { origin: origin ?? { x: 0.5, y: 0.6 }, colors, disableForReducedMotion: true, zIndex: 80 };
+  const base = { origin: origin ?? { x: 0.5, y: 0.6 }, colors, disableForReducedMotion: true, zIndex: 95 };
   confetti({ ...base, particleCount: Math.round(90 * intensity), spread: 75, startVelocity: 45 });
   confetti({ ...base, particleCount: Math.round(40 * intensity), spread: 120, startVelocity: 30, scalar: 0.8 });
 }

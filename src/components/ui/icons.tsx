@@ -78,3 +78,24 @@ export const Close = (p: P) => (
     <line x1="200" y1="200" x2="56" y2="56" />
   </Icon>
 );
+
+export const Download = (p: P) => (
+  <Icon {...p}>
+    <line x1="128" y1="40" x2="128" y2="152" />
+    <polyline points="80 104 128 152 176 104" />
+    <path d="M216 152v48a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8v-48" />
+  </Icon>
+);
+
+export const Copy = (p: P) => (
+  <Icon {...p}>
+    <polyline points="168 168 208 168 208 48 88 48 88 88" />
+    <rect x="48" y="88" width="120" height="120" />
+  </Icon>
+);
+
+export const Check = (p: P) => (
+  <Icon {...p}>
+    <polyline points="40 144 96 200 224 72" />
+  </Icon>
+);

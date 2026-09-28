@@ -1,19 +1,25 @@
-// Cloudflare Workers: the static export (./out) plus a small Worker for the
-// volleyball ranking API. `npm run deploy` builds the site and uploads both.
+// Cloudflare Workers: the static export in ./out plus a small Worker for /api/*
+// (résumé API and the volleyball ranking). `npm run deploy` builds the static
+// export into ./out and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nathan-camini-portfolio",
-  "main": "worker/index.ts",
   "compatibility_date": "2026-09-01",
+  // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts);
+  // /api/volley/* — the volleyball leaderboard (worker/store.ts, D1).
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./out",
-    "binding": "ASSETS",
-    // Only the API reaches the Worker; pages and files are served straight from the assets.
+    // Only the API reaches the Worker; pages and files skip it entirely.
     "run_worker_first": ["/api/*"],
     // /pt → out/pt.html, /pt/ → 307 /pt
     "html_handling": "drop-trailing-slash",
     // Unknown paths get out/404.html with a real 404 status.
     "not_found_handling": "404-page",
+  },
+  // src/config/site.ts reads this Next.js build-time variable; the Worker has no `process`.
+  "define": {
+    "process.env.NEXT_PUBLIC_SITE_URL": "undefined",
   },
   // Global leaderboard. No database_id: the first `wrangler deploy` creates the
   // database by name (and reuses it afterwards); the Worker creates the tables

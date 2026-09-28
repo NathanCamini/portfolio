@@ -10,12 +10,15 @@ import {
   type TopResponse,
 } from '../src/components/volleyball/ranking/match';
 import { checkNickname } from '../src/components/volleyball/ranking/nickname';
+import { handleApiRequest } from '../src/lib/resume-api';
 import * as store from './store';
 
 /**
- * Ranking API for the beach-volley mini-game. Everything else on the site is
- * static and served straight from the assets (wrangler.jsonc routes only
- * /api/* here), so this Worker runs only when someone plays.
+ * Cloudflare Worker. `run_worker_first: ["/api/*"]` in wrangler.jsonc routes
+ * only the API here; every other path is served directly from the static assets.
+ *
+ * `/api/volley/*` is the beach-volley ranking below; the rest of `/api`
+ * (GET /api/nathan, the résumé) is src/lib/resume-api.ts.
  *
  *   GET  /api/volley/ranking  → the top 10 (each player's best)
  *   POST /api/volley/matches  → a single-use ticket, issued at kickoff
@@ -31,7 +34,6 @@ import * as store from './store';
  */
 
 export interface Env {
-  ASSETS: Fetcher;
   /** Absent on preview deployments (see wrangler.jsonc): the API answers 503 and the game plays offline. */
   DB?: D1Database;
   KICKOFF_LIMIT?: RateLimit;
@@ -67,7 +69,7 @@ function json(body: unknown, status = 200): Response {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith('/api/volley/')) return handleApiRequest(request);
     try {
       return await route(request, url, env);
     } catch (err) {

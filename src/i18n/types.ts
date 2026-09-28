@@ -212,8 +212,67 @@ export interface Dictionary {
     label: string;
     title: string;
   };
+  /** The interactive terminal opened from the hero (and with the ' / ~ keys). */
+  terminal: {
+    title: string;
+    user: string;
+    welcome: string;
+    shortcut: string;
+    close: string;
+    /** Localised file names; the English ones are always accepted too. */
+    files: { projects: string; experience: string; education: string; contact: string; resume: string };
+    /** Command list shown by `help` (and on open); each entry is clickable. */
+    help: { cmd: string; desc: string }[];
+    helpFooter: string;
+    whoami: string[];
+    notFound: string;
+    creativity: string;
+    noSuchFile: string;
+    pdfHint: string;
+    sudoDenied: string;
+    hire: string[];
+    rm: string[];
+    rollback: string[];
+    gitPush: string[];
+    fetching: string;
+    fetchError: string;
+    downloading: string;
+    volleyball: string;
+    contactLabels: { email: string; linkedin: string; github: string };
+  };
+  /** Résumé: the download bar next to the experience timeline, the PDF and the JSON API. */
+  cv: {
+    title: string;
+    blurb: string;
+    download: string;
+    apiHint: string;
+    openJson: string;
+    copy: string;
+    copied: string;
+    /** One-line professional headline under the name (PDF and API). */
+    headline: string;
+    summary: string;
+    summaryLabel: string;
+    skillsLabel: string;
+    stackLabel: string;
+    /** Last line of the PDF. */
+    pdfFooter: string;
+    docTitle: string;
+  };
   footer: {
     role: string;
     backToTop: string;
+  };
+  /** Easter egg: the hero's DELETE sticker runs and a psql session rolls it back. SQL stays in English. */
+  incident: {
+    /** HINT under the syntax error: why the `;` before WHERE deleted everything. */
+    hint: string;
+    /** SQL comments typed at the prompt (without the leading `-- `). */
+    lost: string;
+    relief: string;
+    lesson: string;
+    skip: string;
+    /** Screen-reader announcement (the terminal itself is decorative). */
+    announce: string;
   };
 }

@@ -36,7 +36,7 @@ export function CarShowcase() {
   const onError = useCallback(() => setStatus('error'), []);
 
   return (
-    <section ref={sectionRef} className={styles.section} aria-labelledby="car-title">
+    <section id="carro" ref={sectionRef} className={styles.section} aria-labelledby="car-title">
       <div className={styles.stage}>
         {near && status !== 'error' && (
           <CarCanvas

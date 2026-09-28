@@ -5,6 +5,7 @@ import { motion, useScroll, useSpring } from 'motion/react';
 import { Reveal } from '@/components/motion/Reveal';
 import { useI18n } from '@/i18n/I18nProvider';
 import styles from './Bio.module.css';
+import { ResumeBar } from './ResumeBar';
 
 /**
  * Bio: narrative on the left, education cards on the right, then a
@@ -69,6 +70,9 @@ export function Bio() {
 
       <div className={styles.exp}>
         <Reveal className="eyebrow-muted">{bio.expLabel}</Reveal>
+        <Reveal delay={80}>
+          <ResumeBar />
+        </Reveal>
         <div ref={timelineRef} className={styles.timeline}>
           <span className={styles.rail} aria-hidden="true">
             <motion.span className={styles.railFill} style={{ scaleY: railFill }} />

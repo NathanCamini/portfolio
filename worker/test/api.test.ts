@@ -39,7 +39,7 @@ async function play(name: string, player: number, cpu: number, durationMs: numbe
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
-  env = { ASSETS: { fetch: async () => new Response('static') } as unknown as Fetcher, DB: createD1() };
+  env = { DB: createD1() };
 });
 afterEach(() => vi.useRealTimers());
 
@@ -132,7 +132,10 @@ describe('ranking API', () => {
     expect(plain.status).toBe(415);
     expect((await call('POST', '/api/volley/scores', { matchId: 'nope' })).status).toBe(400);
     expect((await call('GET', '/api/volley/nothing')).status).toBe(404);
-    expect(await (await call('GET', '/pt')).text()).toBe('static');
+    // The rest of /api is the résumé API (src/lib/resume-api.ts).
+    const resume = await call('GET', '/api/nathan?lang=pt');
+    expect(resume.status).toBe(200);
+    expect(resume.headers.get('Content-Language')).toBe('pt-BR');
 
     env.KICKOFF_LIMIT = { limit: async () => ({ success: false }) };
     expect((await call('POST', '/api/volley/matches')).status).toBe(429);

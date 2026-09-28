@@ -32,6 +32,15 @@
   max-width: var(--page-max);
   margin: 0 auto;
   padding: 120px var(--gutter) 80px;
+  /* The copy is stacked above the sticker layer and spans the whole hero: let the
+     pointer through to the stickers (hover wobble, the DELETE one's click), except
+     on the CTAs. The hero text isn't selectable anyway. */
+  pointer-events: none;
+}
+
+.inner a,
+.inner button {
+  pointer-events: auto;
 }
 
 .tags {
@@ -134,6 +143,15 @@
   background: color-mix(in srgb, #10301f 75%, transparent);
 }
 
+/* A sticker that does something (the DELETE one runs its query): a button dressed as a sticker. */
+.clickable {
+  margin: 0;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
 /* Long stickers need room: hidden until the viewport is wide enough. */
 @media (max-width: 1199px) {
   .wide {
@@ -145,5 +163,72 @@
 @media (max-width: 900px) {
   .tokens {
     display: none;
+  }
+}
+
+/* "Open terminal" CTA: a prompt glyph with a blinking caret and the keyboard hint. */
+.termBtn {
+  font-family: var(--font-heading);
+  gap: 10px;
+  border-color: color-mix(in srgb, #7ee2a8 45%, transparent);
+  box-shadow: 0 0 24px -8px color-mix(in srgb, #7ee2a8 60%, transparent);
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.termBtn:hover {
+  border-color: #7ee2a8;
+  box-shadow: 0 0 32px -6px color-mix(in srgb, #7ee2a8 70%, transparent);
+}
+
+.termIcon {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #7ee2a8;
+  letter-spacing: -0.05em;
+}
+
+.termIcon::after {
+  content: '';
+  display: inline-block;
+  width: 0.6em;
+  height: 2px;
+  margin-left: 2px;
+  vertical-align: -1px;
+  background: currentColor;
+  animation: caret 1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--color-divider);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-neutral-400);
+}
+
+@media (hover: none) {
+  .kbd {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .termIcon::after {
+    animation: none;
   }
 }

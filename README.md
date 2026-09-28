@@ -15,21 +15,45 @@ npm run db:migrate # aplica migrations/ no D1 de produção (só para mudanças 
 ```
 
 Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção. A única parte
-dinâmica é a API do ranking, um Worker pequeno em `worker/`. Com `npm run dev` o jogo funciona normalmente e o
-ranking aparece como indisponível (não há Worker); use `npm run preview` para testar o ranking.
+dinâmica é um Worker pequeno em `worker/` (API do currículo e ranking do vôlei). Com `npm run dev` o jogo funciona
+normalmente e o ranking aparece como indisponível (não há Worker); use `npm run preview` para testar o ranking.
 
 ## Deploy na Cloudflare
 
-O `wrangler.jsonc` publica `out/` como _static assets_ e o Worker `worker/index.ts`, que só recebe `/api/*`
-(`run_worker_first`) — páginas e arquivos continuam saindo direto dos assets, sem executar código:
+O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker:
 `/pt` → `pt.html`, barra final redirecionada, URLs desconhecidas → `404.html` com status 404. O arquivo
 `public/_headers` define cache de 1 ano para `/_next/static/*` (arquivos com hash) e headers de segurança básicos.
+Só `/api/*` passa pelo código do Worker (`worker/index.ts`); todo o resto sai direto dos arquivos estáticos.
 
-**Banco do ranking (D1), sem passo manual.** O binding `DB` tem só `database_name` (`portfolio-ranking`): o primeiro
-`wrangler deploy` cria o banco na sua conta e os seguintes reaproveitam. As tabelas são criadas pelo próprio Worker
-na primeira requisição, a partir de `migrations/0001_volley_ranking.sql` (idempotente). Para mudanças futuras de
-schema, crie `migrations/0002_….sql` e rode `npm run db:migrate`. Deploys de _preview_ (branches) não recebem banco:
-o jogo funciona e o ranking aparece como indisponível, o que mantém testes fora do ranking real.
+### Ranking do vôlei: banco D1, sem passo manual
+
+O binding `DB` tem só `database_name` (`portfolio-ranking`): o primeiro `wrangler deploy` cria o banco na sua conta
+e os seguintes reaproveitam. As tabelas são criadas pelo próprio Worker na primeira requisição, a partir de
+`migrations/0001_volley_ranking.sql` (idempotente). Para mudanças futuras de schema, crie `migrations/0002_….sql` e
+rode `npm run db:migrate`. Deploys de _preview_ (branches) não recebem banco: o jogo funciona e o ranking aparece
+como indisponível, o que mantém testes fora do ranking real.
+
+### Currículo: PDF e API
+
+Os dois saem dos mesmos dicionários da página (`src/lib/resume.ts`), então nunca ficam desatualizados:
+
+- **PDF** — `/cv/nathan-camini-pt.pdf` e `/cv/nathan-camini-en.pdf`, gerados no build com jsPDF
+  (`src/app/cv/[file]/route.ts`). Texto real, selecionável e com links.
+- **API** — `GET /api/nathan` devolve o currículo em JSON (`src/lib/resume-api.ts`):
+  `?lang=pt|en` (senão usa `Accept-Language`), `?format=pdf` ou `Accept: application/pdf` → 303 para o PDF,
+  CORS aberto, `HEAD`/`OPTIONS`, 405 para outros métodos. Funciona com `npm run preview` (não com `npm run dev`).
+
+```bash
+curl https://seu-dominio.com/api/nathan?lang=pt
+```
+
+### Terminal
+
+O botão **Abrir terminal** do topo (ou as teclas `'` / `~` em qualquer lugar da página) abre um terminal no centro da
+tela. Na primeira vez ele digita `help` sozinho e lista os comandos, todos clicáveis: `whoami`, `ls projetos`,
+`cat experiencia.txt`, `curl /api/nathan` (chama a API de verdade), `open curriculo.pdf`, `sudo contratar nathan` 🎉,
+`volei`, `rm -rf /` e outros. Comandos desconhecidos respondem que _o sistema não estava esperando tanta
+criatividade_. A lógica dos comandos fica em `src/components/terminal/engine.ts` (pura, com testes).
 
 **Pela linha de comando**
 
@@ -62,6 +86,7 @@ command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
 | `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
 | `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
 | `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
+| `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                 |
 | Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP              |
 | `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers         |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
@@ -96,6 +121,7 @@ src/
    │  ├─ CarRigController.ts # lógica scroll × rotação (TS puro, testado)
    │  ├─ useDragRotation.ts  # ponteiro/teclado → intenção de rotação
    │  └─ porsche911/         # modelo procedural: body (loft), wheel, details, materials
+   ├─ incident/              # easter egg do sticker DELETE: roteiro psql (TS puro, testado) + glitch
    ├─ siege/                 # Peek Trainer: engine (TS puro, testado), render, componente
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
@@ -105,7 +131,7 @@ src/
       ├─ RankingOverlay.tsx  # formulário do nome e top 10 sobre a quadra
       └─ VolleyballGame.tsx  # painel: toolbar, tela cheia, controles touch
 worker/
-├─ index.ts                  # API /api/volley/* (rotas, validação, rate limit)
+├─ index.ts                  # /api/volley/* (rotas, validação, rate limit); o resto de /api → src/lib/resume-api.ts
 ├─ store.ts                  # SQL do D1 (ranking por jogador, ticket de uso único)
 └─ test/                     # testes da API contra SQLite real (node:sqlite)
 migrations/                  # schema do D1
@@ -157,6 +183,14 @@ Validação contra trapaça, em camadas:
 Isso barra adulteração casual (editar a requisição no DevTools, repetir o POST, inventar placar). Não é prova de
 partida real: quem se dedicar ainda consegue forjar um resultado _plausível_. O próximo passo seria o servidor
 re-simular a partida a partir dos inputs gravados — o motor é TypeScript puro e determinístico, então pode rodar no Worker.
+
+**Easter egg: `DELETE` sem `WHERE`.** O sticker `DELETE * from USERS; WHERE …` do hero executa a query: cada bloco
+da página (navbar + filhos de `<main>`) some com glitch e a tela "desliga" como um CRT; no centro, uma sessão `psql`
+repete a query com seus erros (`ERROR: syntax error at or near "WHERE"`, transação abortada) e digita `ROLLBACK;` —
+cada linha do log traz um bloco de volta. Nada é desmontado: os blocos só ficam ocultos via Web Animations API
+(`cancel()` devolve o DOM intacto), então scroll, carro e partida continuam onde estavam. A sessão inteira é uma
+timeline pura (`frameAt(timeline, t)`), coberta por testes; `Esc` pula, e `prefers-reduced-motion` troca o glitch
+por um fade.
 
 **i18n.** `/pt` e `/en` são pré-renderizados (SEO + hreflang; `x-default` aponta para `/`, que detecta o idioma
 do sistema). A troca de idioma é estado no cliente + `history.replaceState`: o texto muda na hora e **nada remonta**
