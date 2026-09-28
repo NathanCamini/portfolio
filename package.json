@@ -7,10 +7,11 @@
     "build": "next build",
     "preview": "next build && wrangler dev",
     "deploy": "next build && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p worker && tsc --noEmit -p worker/test",
     "test": "vitest run",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"worker/**/*.ts\"",
     "check": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260928.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19",

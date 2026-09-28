@@ -1,0 +1,21 @@
+{
+  // The Worker runs on the Workers runtime, not in a browser: no DOM types,
+  // Cloudflare's instead. The root tsconfig excludes this folder; tests have
+  // their own config (test/tsconfig.json).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["test"]
+}

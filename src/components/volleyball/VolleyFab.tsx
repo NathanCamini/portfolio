@@ -26,7 +26,9 @@ export function VolleyFab() {
   useEffect(() => {
     const el = document.getElementById('volei');
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setSectionVisible(e.isIntersecting), { threshold: 0.05 });
+    const io = new IntersectionObserver((entries) => setSectionVisible(entries[entries.length - 1].isIntersecting), {
+      threshold: 0.05,
+    });
     io.observe(el);
     return () => io.disconnect();
   }, []);

@@ -13,6 +13,7 @@ export function createGame(cpuSpeed: number, winScore: number, rng: () => number
     phase: 'title',
     phaseTime: 0,
     clock: 0,
+    matchTime: 0,
     server: 0,
     lastScorer: null,
     cpuSpeed,
@@ -25,6 +26,7 @@ export function createGame(cpuSpeed: number, winScore: number, rng: () => number
 export function primaryAction(g: GameState) {
   if (g.phase === 'title' || g.phase === 'over') {
     g.score = [0, 0];
+    g.matchTime = 0;
     serve(g, 0);
   }
 }
@@ -116,6 +118,7 @@ export function stepGame(g: GameState, dt: number, input: Input, rng: () => numb
   const { player: p, cpu: c, ball: b } = g;
   const { NET_X, NET_W, W, GROUND, SERVE_Y } = FIELD;
   g.clock += f;
+  if (g.phase !== 'title' && g.phase !== 'over') g.matchTime += ms;
 
   p.vx = ((input.right ? 1 : 0) - (input.left ? 1 : 0)) * PHYSICS.PLAYER_SPEED;
   if (input.jump && p.y >= GROUND && g.phase !== 'title' && g.phase !== 'over') p.vy = PHYSICS.PLAYER_JUMP;
