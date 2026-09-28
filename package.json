@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "preview": "next build && wrangler dev",
+    "deploy": "next build && wrangler deploy",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
@@ -29,7 +30,8 @@
     "eslint-config-next": "16.3.6",
     "prettier": "^3.9.9",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "^4.142.0"
   },
   "engines": {
     "node": ">=20.9"

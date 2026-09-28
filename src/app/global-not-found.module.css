@@ -1,0 +1,30 @@
+.main {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-content: center;
+  justify-items: start;
+  gap: 24px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--gutter);
+}
+
+.title {
+  margin: 0;
+  font-weight: 500;
+  font-size: clamp(34px, 5.5vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.en {
+  display: block;
+  color: var(--color-neutral-500);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}

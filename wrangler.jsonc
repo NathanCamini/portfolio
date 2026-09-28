@@ -1,0 +1,14 @@
+// Cloudflare Workers — static assets only (no Worker script runs).
+// `npm run deploy` builds the static export into ./out and uploads it.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nathan-camini-portfolio",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./out",
+    // /pt → out/pt.html, /pt/ → 307 /pt
+    "html_handling": "drop-trailing-slash",
+    // Unknown paths get out/404.html with a real 404 status.
+    "not_found_handling": "404-page",
+  },
+}

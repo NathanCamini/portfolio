@@ -1,16 +1,16 @@
 /**
- * Locale configuration shared by the server (layout, metadata, proxy) and the
- * client (I18nProvider). Keep this file free of React/Next imports so the
- * proxy can import it too.
+ * Locale configuration shared by the server (layout, metadata) and the client
+ * (I18nProvider, the `/` language redirect). No React/Next imports here.
  */
 export const locales = ['pt', 'en'] as const;
 
 export type Locale = (typeof locales)[number];
 
-export const defaultLocale: Locale = 'pt';
-
-/** Cookie that remembers an explicit language choice across visits. */
-export const LOCALE_COOKIE = 'NEXT_LOCALE';
+/**
+ * Used at `/` when none of the visitor's system languages is supported
+ * (e.g. a Spanish or German browser): English is the broadest common ground.
+ */
+export const fallbackLocale: Locale = 'en';
 
 /** Value written to `<html lang>` for each locale. */
 export const htmlLang: Record<Locale, string> = {

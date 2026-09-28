@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { htmlLang, LOCALE_COOKIE, type Locale } from './config';
+import { htmlLang, type Locale } from './config';
 import { dictionaries } from './dictionaries';
 import type { Dictionary } from './types';
 
@@ -16,8 +16,10 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 /**
  * Client-side i18n.
  *
- * - The server renders `/pt` and `/en` statically (SEO, correct `<html lang>`,
- *   hreflang alternates), passing the route locale as `initialLocale`.
+ * - `/pt` and `/en` are pre-rendered at build time (SEO, correct `<html lang>`,
+ *   hreflang alternates); the route locale arrives as `initialLocale`.
+ * - `/` sends first-time visitors to the language of their system settings
+ *   (see app/(root)/layout.tsx); after that the PT/EN toggle is theirs.
  * - Switching language is a pure client state change: copy swaps instantly,
  *   the URL is rewritten with `history.replaceState` (which the App Router
  *   syncs with `usePathname`), and nothing remounts — the 3D car keeps its
@@ -38,9 +40,6 @@ export function I18nProvider({ initialLocale, children }: { initialLocale: Local
       const { pathname, search, hash } = window.location;
       const rest = pathname.replace(/^\/(pt|en)(?=\/|$)/, '');
       window.history.replaceState(null, '', `/${next}${rest}${search}${hash}`);
-
-      // Remember the explicit choice so `/` redirects to it next time (see proxy.ts).
-      document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
     },
     [locale],
   );
