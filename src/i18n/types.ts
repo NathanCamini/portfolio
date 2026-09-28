@@ -16,13 +16,27 @@ export interface EducationItem {
 }
 
 export interface PastProject {
-  year: string;
+  /** Small caps line above the title (where / when it was built). */
+  kicker: string;
   type: string;
   title: string;
   body: string;
   stack: string[];
   /** Case-study link. Leave undefined to hide the link. */
   href?: string;
+}
+
+export interface ExperienceItem {
+  role: string;
+  company: string;
+  period: string;
+  place: string;
+  /** Current job: highlighted dot on the timeline. */
+  current?: boolean;
+  body: string;
+  /** Optional bullet list of main contributions. */
+  highlights?: string[];
+  stack?: string[];
 }
 
 export interface FutureProject {
@@ -89,6 +103,8 @@ export interface Dictionary {
     p2: string;
     eduLabel: string;
     edu: EducationItem[];
+    expLabel: string;
+    exp: ExperienceItem[];
   };
   projects: {
     label: string;

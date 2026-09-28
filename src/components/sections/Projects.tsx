@@ -79,7 +79,7 @@ export function Projects() {
                 <Tilt>
                   <article className={`card ${styles.card}`}>
                     <div className="card-kicker">
-                      {item.year} · {item.type}
+                      {item.kicker} · {item.type}
                     </div>
                     <h3 className="card-title">{item.title}</h3>
                     <p className="card-body">{item.body}</p>

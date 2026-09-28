@@ -58,3 +58,118 @@
   background: var(--color-accent);
   box-shadow: 0 0 10px var(--color-accent);
 }
+
+/* ---- Experience timeline ---- */
+
+.exp {
+  margin-top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 36px;
+}
+
+.jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Static track + a fill that grows with scroll progress. */
+.rail {
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-neutral-800);
+  overflow: hidden;
+}
+
+.railFill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(var(--color-accent), var(--color-accent-2));
+  transform-origin: top;
+}
+
+.job {
+  position: relative;
+}
+
+.dot {
+  position: absolute;
+  left: -36px;
+  top: 26px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 2px solid var(--color-neutral-600);
+}
+
+.dotCurrent {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 0 var(--color-accent);
+  animation: pulse 2.2s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotCurrent {
+    animation: none;
+  }
+}
+
+.jobCard h3 {
+  margin: 0;
+}
+
+.company {
+  color: var(--color-accent-400);
+}
+
+.jobBody {
+  margin: 0;
+  color: var(--color-neutral-300);
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+.highlights {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--color-neutral-300);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.highlights li::marker {
+  color: var(--color-accent);
+}
+
+.stack {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
