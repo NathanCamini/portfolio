@@ -1,0 +1,60 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 64px;
+  margin-top: 24px;
+}
+
+.p1 {
+  margin: 28px 0 0;
+}
+
+.p2 {
+  margin: 16px 0 0;
+}
+
+.edu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  padding: 24px;
+  gap: 10px;
+  transition:
+    box-shadow 0.3s,
+    transform 0.3s;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.meta {
+  font-size: 14px;
+  color: var(--color-neutral-400);
+}
+
+.progress {
+  margin-top: 8px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-neutral-800);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  box-shadow: 0 0 10px var(--color-accent);
+}

@@ -1,0 +1,173 @@
+import { updateCpu } from './ai';
+import { FIELD, PHYSICS, TIMING } from './constants';
+import type { Body, GameState, Input, Side } from './types';
+
+export function createGame(cpuSpeed: number, winScore: number, rng: () => number = Math.random): GameState {
+  const { GROUND, PLAYER_HOME, CPU_HOME, SERVE_Y, W } = FIELD;
+  const r = PHYSICS.PLAYER_RADIUS;
+  return {
+    player: { x: PLAYER_HOME, y: GROUND, vx: 0, vy: 0, r },
+    cpu: { x: CPU_HOME, y: GROUND, vx: 0, vy: 0, r },
+    ball: { x: PLAYER_HOME, y: SERVE_Y, vx: 0, vy: 0, r: PHYSICS.BALL_RADIUS },
+    score: [0, 0],
+    phase: 'title',
+    phaseTime: 0,
+    clock: 0,
+    server: 0,
+    lastScorer: null,
+    cpuSpeed,
+    winScore,
+    stars: Array.from({ length: 40 }, () => [rng() * W, rng() * 300, rng() * 1.4 + 0.4] as [number, number, number]),
+  };
+}
+
+/** Click / space / "jump" button: starts a match from the title or game-over screen. */
+export function primaryAction(g: GameState) {
+  if (g.phase === 'title' || g.phase === 'over') {
+    g.score = [0, 0];
+    serve(g, 0);
+  }
+}
+
+function serve(g: GameState, side: Side) {
+  g.server = side;
+  Object.assign(g.ball, { x: side ? FIELD.CPU_HOME : FIELD.PLAYER_HOME, y: FIELD.SERVE_Y, vx: 0, vy: 0 });
+  Object.assign(g.player, { x: FIELD.PLAYER_HOME, vx: 0 });
+  Object.assign(g.cpu, { x: FIELD.CPU_HOME, vx: 0 });
+  g.phase = 'serve';
+  g.phaseTime = 0;
+}
+
+function movePlayer(p: Body, f: number, minX: number, maxX: number) {
+  p.x = Math.max(minX, Math.min(maxX, p.x + p.vx * f));
+  p.vy += PHYSICS.PLAYER_GRAVITY * f;
+  p.y += p.vy * f;
+  if (p.y > FIELD.GROUND) {
+    p.y = FIELD.GROUND;
+    p.vy = 0;
+  }
+}
+
+/**
+ * Ball vs. player. Players are half-discs (slime style), so only contacts on
+ * the upper half count. Resolves penetration, reflects the relative velocity
+ * along the contact normal, adds some of the player's own motion and
+ * guarantees an upward launch.
+ */
+function collidePlayer(b: Body, p: Body): boolean {
+  const dx = b.x - p.x;
+  const dy = b.y - p.y;
+  const d = Math.hypot(dx, dy);
+  const min = p.r + b.r;
+  if (d >= min || d === 0 || dy > b.r * 0.6) return false;
+
+  const nx = dx / d;
+  const ny = dy / d;
+  b.x = p.x + nx * min;
+  b.y = p.y + ny * min;
+
+  const vn = (b.vx - p.vx) * nx + (b.vy - p.vy) * ny;
+  if (vn < 0) {
+    b.vx -= PHYSICS.PLAYER_BOUNCE * vn * nx;
+    b.vy -= PHYSICS.PLAYER_BOUNCE * vn * ny;
+  }
+  b.vx += p.vx * PHYSICS.CARRY;
+  b.vy += Math.min(p.vy, 0) * PHYSICS.CARRY;
+  b.vy = Math.min(b.vy, PHYSICS.MIN_LAUNCH_VY);
+
+  const speed = Math.hypot(b.vx, b.vy);
+  if (speed > PHYSICS.MAX_BALL_SPEED) {
+    b.vx *= PHYSICS.MAX_BALL_SPEED / speed;
+    b.vy *= PHYSICS.MAX_BALL_SPEED / speed;
+  }
+  return true;
+}
+
+/** Ball vs. net (axis-aligned rectangle): closest-point test, then reflect. */
+function collideNet(b: Body) {
+  const { NET_X, NET_W, NET_TOP, GROUND } = FIELD;
+  const cx = Math.max(NET_X - NET_W / 2, Math.min(NET_X + NET_W / 2, b.x));
+  const cy = Math.max(NET_TOP, Math.min(GROUND, b.y));
+  const dx = b.x - cx;
+  const dy = b.y - cy;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= b.r * b.r) return;
+
+  const d = Math.sqrt(d2) || 0.01;
+  // Centre inside the rectangle: push out horizontally towards the side it came from.
+  const nx = d2 ? dx / d : b.x < NET_X ? -1 : 1;
+  const ny = d2 ? dy / d : 0;
+  b.x = cx + nx * b.r;
+  b.y = cy + ny * b.r;
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn < 0) {
+    b.vx -= PHYSICS.NET_BOUNCE * vn * nx;
+    b.vy -= PHYSICS.NET_BOUNCE * vn * ny;
+  }
+}
+
+/**
+ * Advances the simulation by `dt` seconds of real time (one fixed step).
+ * `f` = the same step expressed in 60 fps frames, the unit all constants use.
+ */
+export function stepGame(g: GameState, dt: number, input: Input, rng: () => number = Math.random) {
+  const f = dt * 60;
+  const ms = dt * 1000;
+  const { player: p, cpu: c, ball: b } = g;
+  const { NET_X, NET_W, W, GROUND, SERVE_Y } = FIELD;
+  g.clock += f;
+
+  p.vx = ((input.right ? 1 : 0) - (input.left ? 1 : 0)) * PHYSICS.PLAYER_SPEED;
+  if (input.jump && p.y >= GROUND && g.phase !== 'title' && g.phase !== 'over') p.vy = PHYSICS.PLAYER_JUMP;
+
+  updateCpu(g, f, rng);
+  movePlayer(p, f, p.r, NET_X - NET_W / 2 - p.r);
+  movePlayer(c, f, NET_X + NET_W / 2 + c.r, W - c.r);
+
+  if (g.phase === 'serve') {
+    // Ball hovers until someone touches it (or it drops by itself).
+    g.phaseTime += ms;
+    b.y = SERVE_Y + Math.sin(g.phaseTime / 160) * 5;
+    if (collidePlayer(b, p) || collidePlayer(b, c) || g.phaseTime > TIMING.SERVE_AUTO_DROP_MS) {
+      g.phase = 'play';
+    }
+    return;
+  }
+
+  if (g.phase === 'point') {
+    g.phaseTime += ms;
+    if (g.phaseTime > TIMING.POINT_PAUSE_MS) {
+      if (Math.max(...g.score) >= g.winScore) g.phase = 'over';
+      else serve(g, g.server);
+    }
+    return;
+  }
+
+  if (g.phase !== 'play') return;
+
+  b.vy += PHYSICS.BALL_GRAVITY * f;
+  b.x += b.vx * f;
+  b.y += b.vy * f;
+  if (b.x < b.r) {
+    b.x = b.r;
+    b.vx = Math.abs(b.vx) * PHYSICS.WALL_BOUNCE;
+  }
+  if (b.x > W - b.r) {
+    b.x = W - b.r;
+    b.vx = -Math.abs(b.vx) * PHYSICS.WALL_BOUNCE;
+  }
+  collideNet(b);
+  collidePlayer(b, p);
+  collidePlayer(b, c);
+
+  // Ball touched the sand: the side it landed on loses the rally.
+  if (b.y + b.r >= GROUND) {
+    b.y = GROUND - b.r;
+    const scorer: Side = b.x < NET_X ? 1 : 0;
+    g.score[scorer]++;
+    g.server = scorer;
+    g.lastScorer = scorer;
+    g.phase = 'point';
+    g.phaseTime = 0;
+  }
+}
