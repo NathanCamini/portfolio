@@ -10,16 +10,46 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { openVolleyball } from '@/lib/volleyball';
 import styles from './Hero.module.css';
 
+type Tone = 'danger' | 'warn' | 'ok';
+
+interface Token {
+  text: string;
+  x: string;
+  y: string;
+  /** Pointer-parallax strength (px at the screen edge): nearer stickers move more. */
+  depth: number;
+  /** Idle float amplitude (px). */
+  float: number;
+  tone?: Tone;
+  /** Long stickers only appear on wide screens, where they don't cover the headline. */
+  wide?: boolean;
+}
+
 /** Back-end flavoured "stickers" floating around the headline, each at its own depth. */
-const TOKENS = [
-  { text: 'GET /api/v1', x: '72%', y: '18%', depth: 40, float: 9 },
-  { text: '200 OK', x: '86%', y: '38%', depth: 70, float: 12 },
-  { text: 'SELECT *', x: '64%', y: '64%', depth: 25, float: 8 },
-  { text: '{ "json": true }', x: '80%', y: '78%', depth: 55, float: 10 },
-  { text: 'queue.publish()', x: '58%', y: '30%', depth: 18, float: 7 },
-  { text: '🏎️', x: '92%', y: '14%', depth: 90, float: 14 },
-  { text: '🏐', x: '70%', y: '88%', depth: 80, float: 16 },
-  { text: '🎮', x: '95%', y: '60%', depth: 60, float: 11 },
+const TOKENS: Token[] = [
+  // The query is wrong on purpose (`DELETE *`, `;` before WHERE) — the emoji sells the joke.
+  {
+    text: 'DELETE * from USERS; WHERE name = "NATHAN CAMINI" 🫢',
+    x: '47%',
+    y: '9%',
+    depth: 30,
+    float: 6,
+    tone: 'danger',
+    wide: true,
+  },
+  { text: 'GET /api/v1', x: '74%', y: '20%', depth: 40, float: 9 },
+  { text: 'queue.publish()', x: '59%', y: '33%', depth: 18, float: 7 },
+  { text: '200 OK', x: '87%', y: '33%', depth: 70, float: 12, tone: 'ok' },
+  { text: '200 - Error 🤔', x: '77%', y: '47%', depth: 50, float: 10, tone: 'warn' },
+  { text: 'SELECT *', x: '61%', y: '60%', depth: 25, float: 8 },
+  { text: '404 - NOT FOUND', x: '83%', y: '67%', depth: 65, float: 11, tone: 'danger' },
+  { text: '{ "json": true }', x: '68%', y: '78%', depth: 55, float: 10 },
+  { text: 'git push --force 😬', x: '55%', y: '89%', depth: 35, float: 9, tone: 'warn', wide: true },
+  { text: '🏎️', x: '93%', y: '11%', depth: 90, float: 14 },
+  { text: '🎮', x: '95%', y: '56%', depth: 60, float: 11 },
+  { text: '🐛', x: '52%', y: '48%', depth: 45, float: 13 },
+  { text: '☕', x: '90%', y: '82%', depth: 75, float: 12 },
+  { text: '🏐', x: '76%', y: '92%', depth: 80, float: 16 },
 ];
 
 function FloatingToken({
@@ -28,7 +58,7 @@ function FloatingToken({
   py,
   index,
 }: {
-  token: (typeof TOKENS)[number];
+  token: Token;
   px: MotionValue<number>;
   py: MotionValue<number>;
   index: number;
@@ -36,10 +66,24 @@ function FloatingToken({
   const x = useTransform(px, (v) => v * token.depth);
   const y = useTransform(py, (v) => v * token.depth);
   const emoji = !/[a-z{]/i.test(token.text);
+  const className = [
+    emoji ? styles.emoji : styles.token,
+    token.tone ? styles[token.tone] : '',
+    token.wide ? styles.wide : '',
+  ].join(' ');
   return (
-    <motion.span className={styles.tokenWrap} style={{ left: token.x, top: token.y, x, y }}>
+    <motion.span
+      className={`${styles.tokenWrap} ${token.wide ? styles.wide : ''}`}
+      style={{ left: token.x, top: token.y, x, y }}
+    >
       <motion.span
-        className={emoji ? styles.emoji : styles.token}
+        className={className}
+        // Poke a sticker and it wobbles.
+        whileHover={{
+          scale: 1.15,
+          rotate: index % 2 ? -8 : 8,
+          transition: { type: 'spring', stiffness: 400, damping: 10 },
+        }}
         initial={{ opacity: 0, scale: 0.6 }}
         animate={{ opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? 4 : -4, 0] }}
         transition={{
