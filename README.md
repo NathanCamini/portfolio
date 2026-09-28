@@ -16,9 +16,32 @@ Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servi
 
 ## Deploy na Cloudflare
 
-O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker (sem código de servidor):
+O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker:
 `/pt` → `pt.html`, barra final redirecionada, URLs desconhecidas → `404.html` com status 404. O arquivo
 `public/_headers` define cache de 1 ano para `/_next/static/*` (arquivos com hash) e headers de segurança básicos.
+Só `/api/*` passa pelo código do Worker (`worker/index.ts`); todo o resto sai direto dos arquivos estáticos.
+
+### Currículo: PDF e API
+
+Os dois saem dos mesmos dicionários da página (`src/lib/resume.ts`), então nunca ficam desatualizados:
+
+- **PDF** — `/cv/nathan-camini-pt.pdf` e `/cv/nathan-camini-en.pdf`, gerados no build com jsPDF
+  (`src/app/cv/[file]/route.ts`). Texto real, selecionável e com links.
+- **API** — `GET /api/nathan` devolve o currículo em JSON (`src/lib/resume-api.ts`):
+  `?lang=pt|en` (senão usa `Accept-Language`), `?format=pdf` ou `Accept: application/pdf` → 303 para o PDF,
+  CORS aberto, `HEAD`/`OPTIONS`, 405 para outros métodos. Funciona com `npm run preview` (não com `npm run dev`).
+
+```bash
+curl https://seu-dominio.com/api/nathan?lang=pt
+```
+
+### Terminal
+
+O botão **Abrir terminal** do topo (ou as teclas `'` / `~` em qualquer lugar da página) abre um terminal no centro da
+tela. Na primeira vez ele digita `help` sozinho e lista os comandos, todos clicáveis: `whoami`, `ls projetos`,
+`cat experiencia.txt`, `curl /api/nathan` (chama a API de verdade), `open curriculo.pdf`, `sudo contratar nathan` 🎉,
+`volei`, `rm -rf /` e outros. Comandos desconhecidos respondem que _o sistema não estava esperando tanta
+criatividade_. A lógica dos comandos fica em `src/components/terminal/engine.ts` (pura, com testes).
 
 **Pela linha de comando**
 
@@ -51,6 +74,7 @@ command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
 | `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
 | `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
 | `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
+| `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                 |
 | `wrangler`                                   | Preview local e deploy no Cloudflare Workers                                 |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 

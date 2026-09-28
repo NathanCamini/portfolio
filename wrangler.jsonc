@@ -1,15 +1,23 @@
-// Cloudflare Workers — static assets only (no Worker script runs).
-// `npm run deploy` builds the static export into ./out and uploads it.
+// Cloudflare Workers: the static export in ./out plus a tiny Worker for /api/*.
+// `npm run deploy` builds the static export into ./out and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nathan-camini-portfolio",
   "compatibility_date": "2026-09-01",
+  // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts).
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./out",
+    // Only the API reaches the Worker; pages and files skip it entirely.
+    "run_worker_first": ["/api/*"],
     // /pt → out/pt.html, /pt/ → 307 /pt
     "html_handling": "drop-trailing-slash",
     // Unknown paths get out/404.html with a real 404 status.
     "not_found_handling": "404-page",
+  },
+  // src/config/site.ts reads this Next.js build-time variable; the Worker has no `process`.
+  "define": {
+    "process.env.NEXT_PUBLIC_SITE_URL": "undefined",
   },
   // Required by `wrangler preview`, which Cloudflare's Git integration runs for
   // non-production branches. Empty = reuse the top-level settings above.

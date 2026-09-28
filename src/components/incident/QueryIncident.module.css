@@ -1,9 +1,9 @@
-/* Full-screen layer above everything but the custom cursor (navbar 50, FAB 60, confetti 80).
-   Transparent: the page blocks glitching away and back are seen right through it. */
+/* Full-screen layer above everything but the custom cursor (navbar 50, FAB 60, confetti 80,
+   terminal 90). Transparent: the page blocks glitching away and back are seen right through it. */
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 95;
   display: grid;
   place-items: center;
   padding: 24px 16px;

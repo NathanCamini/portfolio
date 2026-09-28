@@ -85,13 +85,17 @@ export function QueryIncident() {
     start.current = now - target;
   }, [run]);
 
+  // The incident is modal: Esc skips, and no other shortcut (the terminal's ' / ~, game keys…)
+  // reaches the page. Captured at window, before anyone else; default actions still run,
+  // so Tab and Enter keep working on the skip button.
   useEffect(() => {
     if (!run) return;
     const onKey = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.key === 'Escape') skip();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [run, skip]);
 
   const frame = run ? frameAt(run.timeline, elapsed) : null;
