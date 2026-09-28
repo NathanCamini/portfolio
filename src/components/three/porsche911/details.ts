@@ -19,7 +19,7 @@ import { roofLine } from './body';
 import type { CarMaterials } from './materials';
 
 /**
- * Parts that sit ON the body (lamps, mirrors, spoiler, tail pipes).
+ * Parts that sit ON the body (lamps, mirrors, swan-neck wing, splitter, tail pipes).
  * Instead of hard-coding where the curved surface is, we raycast against the
  * body mesh — so tweaking a character line in body.ts keeps every detail glued
  * to the paint.
@@ -108,66 +108,102 @@ export function createDetails(body: Mesh, mats: CarMaterials) {
     group.add(mirror);
   }
 
-  // ── Active rear spoiler: a thin blade bent to the engine-lid crown, flush when
-  //    retracted; CarRigController raises it with speed like the real car's. ──
-  const spoiler = new Group();
-  const spoilerX = -2.12;
   const deckAt = (x: number, z = 0) => hit(new Vector3(x, 3, z), new Vector3(0, -1, 0))?.point.y ?? roofLine(x);
-  const deckCentre = deckAt(spoilerX);
-  const blade = new Shape();
-  blade.moveTo(-0.09, 0);
-  blade.quadraticCurveTo(-0.01, 0.022, 0.08, 0.008);
-  blade.lineTo(0.08, -0.004);
-  blade.lineTo(-0.09, -0.004);
-  const bladeGeo = track(
-    new ExtrudeGeometry(blade, { depth: 1.12, steps: 16, bevelEnabled: false }).translate(0, 0, -0.56),
-  );
-  // Bend the blade so its span follows the crown of the lid.
-  const pos = bladeGeo.attributes.position;
-  const drop = new Map<number, number>();
-  for (let i = 0; i < pos.count; i++) {
-    const z = Math.round(pos.getZ(i) * 1000) / 1000;
-    if (!drop.has(z)) drop.set(z, deckAt(spoilerX, z) - deckCentre);
-    pos.setY(i, pos.getY(i) + drop.get(z)!);
-  }
-  bladeGeo.computeVertexNormals();
-  const strutGeo = track(new BoxGeometry(0.05, 0.09, 0.018));
-  const struts = [-0.32, 0.32].map((z) => {
-    const s = new Mesh(strutGeo, mats.trim);
-    s.position.set(0, -0.045 + (deckAt(spoilerX, z) - deckCentre), z);
-    return s;
-  });
-  spoiler.add(new Mesh(bladeGeo, mats.paint), ...struts);
-  spoiler.position.set(spoilerX, deckCentre + 0.002, 0);
-  // Match the lid's fore-aft slope so the retracted blade lies flush.
-  const restTilt = Math.atan2(deckAt(spoilerX + 0.08) - deckAt(spoilerX - 0.08), 0.16);
-  spoiler.rotation.z = restTilt;
-  group.add(spoiler);
 
-  // ── Twin oval tail pipes ──
-  const pipeGeo = track(new CylinderGeometry(0.045, 0.045, 0.12, 24, 1, true).rotateZ(Math.PI / 2));
-  const pipeInnerGeo = track(new CircleGeometry(0.04, 24).rotateY(-Math.PI / 2));
-  for (const z of [-0.36, 0.36]) {
+  // ── Swan-neck rear wing with DRS — the GT3 RS signature ──
+  // Main plane: an inverted airfoil (flat top, cambered underside) spanning the car.
+  const WING_X = -1.93;
+  const WING_Y = 1.25;
+  const SPAN = 1.64;
+  const mainFoil = new Shape();
+  mainFoil.moveTo(0.21, 0);
+  mainFoil.quadraticCurveTo(0.08, 0.024, -0.21, 0.014);
+  mainFoil.lineTo(-0.21, 0.004);
+  mainFoil.quadraticCurveTo(0.02, -0.042, 0.21, 0);
+  const mainGeo = track(new ExtrudeGeometry(mainFoil, { depth: SPAN, bevelEnabled: false }).translate(0, 0, -SPAN / 2));
+  const wing = new Group();
+  wing.position.set(WING_X, WING_Y, 0);
+  const mainPlane = new Mesh(mainGeo, mats.carbon);
+  mainPlane.rotation.z = -0.08; // slight angle of attack
+  wing.add(mainPlane);
+
+  // Upper flap: pivots at its leading edge. Steep at rest, flattened when DRS opens.
+  const flapFoil = new Shape();
+  flapFoil.moveTo(0, 0);
+  flapFoil.quadraticCurveTo(-0.07, 0.018, -0.17, 0.008);
+  flapFoil.lineTo(-0.17, 0.0);
+  flapFoil.quadraticCurveTo(-0.08, -0.02, 0, 0);
+  const flapGeo = track(
+    new ExtrudeGeometry(flapFoil, { depth: SPAN - 0.04, bevelEnabled: false }).translate(0, 0, -(SPAN - 0.04) / 2),
+  );
+  const drs = new Group();
+  drs.position.set(-0.16, 0.05, 0);
+  const DRS_CLOSED = -0.42;
+  drs.rotation.z = DRS_CLOSED;
+  drs.add(new Mesh(flapGeo, mats.paint));
+  wing.add(drs);
+
+  // Endplates.
+  const plate = new Shape();
+  plate.moveTo(0.26, -0.07);
+  plate.lineTo(0.24, 0.04);
+  plate.quadraticCurveTo(0.0, 0.1, -0.3, 0.15);
+  plate.lineTo(-0.32, -0.02);
+  plate.quadraticCurveTo(-0.05, -0.1, 0.26, -0.07);
+  const plateGeo = track(new ExtrudeGeometry(plate, { depth: 0.012, bevelEnabled: false }));
+  for (const side of [1, -1]) {
+    const p = new Mesh(plateGeo, mats.carbon);
+    p.position.z = side > 0 ? SPAN / 2 : -SPAN / 2 - 0.012;
+    wing.add(p);
+  }
+
+  // Swan necks: rise from the engine lid and hook over the wing to hold it from above.
+  for (const z of [-0.34, 0.34]) {
+    const baseY = deckAt(-1.84, z) - 0.01;
+    const curve = new CatmullRomCurve3([
+      new Vector3(-1.84, baseY, 0),
+      new Vector3(-1.87, baseY + 0.16, 0),
+      new Vector3(-1.9, WING_Y + 0.07, 0),
+      new Vector3(-1.97, WING_Y + 0.1, 0),
+      new Vector3(-2.03, WING_Y + 0.035, 0),
+    ]);
+    const neck = new Mesh(track(new TubeGeometry(curve, 40, 0.026, 10)), mats.carbon);
+    neck.scale.z = 0.6; // flattened, blade-like section
+    neck.position.z = z;
+    group.add(neck);
+  }
+  group.add(wing);
+
+  // ── Front splitter: a flat plate following the nose outline ──
+  const splitter = new Shape();
+  splitter.moveTo(1.9, -0.84);
+  splitter.lineTo(2.14, -0.82);
+  splitter.quadraticCurveTo(2.34, -0.5, 2.31, 0);
+  splitter.quadraticCurveTo(2.34, 0.5, 2.14, 0.82);
+  splitter.lineTo(1.9, 0.84);
+  splitter.lineTo(1.9, -0.84);
+  const splitterGeo = track(new ExtrudeGeometry(splitter, { depth: 0.018, bevelEnabled: false }).rotateX(Math.PI / 2));
+  const splitterMesh = new Mesh(splitterGeo, mats.trim);
+  splitterMesh.position.y = 0.118;
+  group.add(splitterMesh);
+
+  // ── Twin round centre tail pipes above the diffuser ──
+  const pipeGeo = track(new CylinderGeometry(0.052, 0.052, 0.14, 28, 1, true).rotateZ(Math.PI / 2));
+  const pipeInnerGeo = track(new CircleGeometry(0.047, 28).rotateY(-Math.PI / 2));
+  for (const z of [-0.1, 0.1]) {
     const pipe = new Mesh(pipeGeo, mats.chrome);
-    pipe.scale.set(1, 0.72, 1);
-    pipe.position.set(-2.24, 0.34, z);
+    pipe.position.set(-2.27, 0.36, z);
     const inner = new Mesh(pipeInnerGeo, mats.underbody);
-    inner.scale.set(1, 0.72, 1);
-    inner.position.set(-2.29, 0.34, z);
+    inner.position.set(-2.33, 0.36, z);
     group.add(pipe, inner);
   }
 
   return {
     group,
-    spoiler,
-    spoilerRestY: spoiler.position.y,
-    spoilerRestTilt: restTilt,
+    /** 0 = DRS closed (max downforce) … 1 = open (flap flattened). */
+    setDrs: (open: number) => {
+      drs.rotation.z = DRS_CLOSED + 0.34 * open;
+    },
     dispose: () => geometries.forEach((g) => g.dispose()),
-  } satisfies {
-    group: Object3D;
-    spoiler: Object3D;
-    spoilerRestY: number;
-    spoilerRestTilt: number;
-    dispose: () => void;
-  };
+  } satisfies { group: Object3D; setDrs: (open: number) => void; dispose: () => void };
 }

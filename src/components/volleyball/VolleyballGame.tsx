@@ -68,7 +68,7 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
   });
 
   return (
-    <div id={id} ref={panelRef} className={styles.panel}>
+    <div id={id} ref={panelRef} className={styles.panel} data-no-cursor="">
       <div className={styles.toolbar}>
         <span className={styles.controls}>{vb.controls}</span>
         <div className={styles.actions}>

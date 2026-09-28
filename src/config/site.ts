@@ -14,17 +14,17 @@ export const site = {
 } as const;
 
 /**
- * 3D car settings (Porsche 911, procedurally modelled — see src/components/three/porsche911).
+ * 3D car settings (Porsche 911 GT3 RS, procedurally modelled — see src/components/three/porsche911).
  * Some factory-inspired paints (use finish 'metallic' or 'solid' accordingly):
- *   GT Silver Metallic  #9ea4b0  metallic   (default)
- *   Chalk               #d9d6cf  solid
+ *   Shark Blue          #0d57b0  solid      (default)
+ *   Python Green        #2e9a47  solid
+ *   White               #e8e9eb  solid
  *   Guards Red          #b3121b  solid
- *   Gentian Blue        #1f3a8a  metallic
- *   Design-system blurple #9184d9 metallic
+ *   GT Silver Metallic  #9ea4b0  metallic
  */
 export const carConfig: { color: string; finish: 'metallic' | 'solid' } = {
-  color: '#9ea4b0',
-  finish: 'metallic',
+  color: '#0d57b0',
+  finish: 'solid',
 };
 
 /** Mini-game difficulty: CPU top speed. */

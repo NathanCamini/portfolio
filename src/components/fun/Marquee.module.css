@@ -1,0 +1,51 @@
+.band {
+  position: relative;
+  z-index: 2;
+  padding: 40px 0;
+  /* Overlap the bottom of the hero so the band rides over it while it fades out. */
+  margin-top: -70px;
+  overflow: hidden;
+  /* Soft edges so the ticker melts into the page on both sides. */
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.tilted {
+  transform: rotate(-2deg);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  padding: 14px 0;
+  box-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.second {
+  transform: rotate(1.5deg) translateY(-8px);
+  background: var(--color-surface);
+  color: var(--color-neutral-300);
+  box-shadow: none;
+}
+
+.row {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.track {
+  display: inline-flex;
+  will-change: transform;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  padding-right: 28px;
+  font-size: clamp(18px, 2.4vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.star {
+  font-size: 0.7em;
+  opacity: 0.8;
+}
