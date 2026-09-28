@@ -21,16 +21,7 @@ export const site = {
  *   Guards Red          #b3121b  solid
  *   GT Silver Metallic  #9ea4b0  metallic
  */
-export const carConfig: {
-  /**
-   * 'neon' — SVG line-art 911 driven by the scroll (src/components/car/NeonCar.tsx), no WebGL.
-   * '3d'   — the Three.js model below (kept in the codebase; switch back any time).
-   */
-  mode: 'neon' | '3d';
-  color: string;
-  finish: 'metallic' | 'solid';
-} = {
-  mode: 'neon',
+export const carConfig: { color: string; finish: 'metallic' | 'solid' } = {
   color: '#0d57b0',
   finish: 'solid',
 };
