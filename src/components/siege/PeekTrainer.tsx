@@ -56,7 +56,8 @@ export function PeekTrainer({ strings, label }: { strings: TrainerStrings; label
     resize();
 
     let visible = false;
-    const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+    // Several entries can arrive in one callback: the last one is the current state.
+    const io = new IntersectionObserver((entries) => (visible = entries[entries.length - 1].isIntersecting));
     io.observe(stage);
 
     const local = (e: PointerEvent) => {

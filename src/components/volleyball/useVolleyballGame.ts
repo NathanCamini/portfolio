@@ -76,7 +76,9 @@ export function useVolleyballGame({ canvasRef, stageRef, panelRef, strings, cpuL
     resize();
 
     let visible = true;
-    const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+    // One callback can batch several entries (e.g. the panel expanding while the page scrolls to it):
+    // the last one is the current state. Reading the first froze the game on open, intermittently.
+    const io = new IntersectionObserver((entries) => (visible = entries[entries.length - 1].isIntersecting));
     io.observe(stage);
 
     let raf = 0;
