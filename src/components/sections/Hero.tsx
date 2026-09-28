@@ -190,11 +190,6 @@ export function Hero() {
       </motion.div>
 
       <motion.div className={styles.inner} style={{ y: parallaxY, opacity: fade, scale, filter: blur }}>
-        <Reveal delay={0} className={styles.tags}>
-          <span className="tag tag-accent">{t.hero.tag1}</span>
-          <span className="tag tag-neutral">{t.hero.tag2}</span>
-        </Reveal>
-
         <Reveal as="h1" delay={120} className={styles.title}>
           {t.hero.titleLead} <RotatingText key={locale} words={t.hero.titleWords} />
         </Reveal>

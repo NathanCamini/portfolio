@@ -1,12 +1,19 @@
 .slot {
-  display: block;
-  /* Reserve two lines so the page below never jumps as words change length. */
-  min-height: 2em;
+  display: grid;
   perspective: 600px;
 }
 
+/* Every child sits in the same cell; the tallest (a ghost) sets the height. */
+.slot > * {
+  grid-area: 1 / 1;
+}
+
+.ghost {
+  visibility: hidden;
+}
+
 .word {
-  display: inline;
+  display: block;
   color: var(--color-accent-300);
   text-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 55%, transparent);
 }

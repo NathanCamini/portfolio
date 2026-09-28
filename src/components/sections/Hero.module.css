@@ -1,7 +1,9 @@
 .hero {
   position: relative;
-  min-height: 100vh;
-  min-height: 100svh;
+  /* A bit shorter than the viewport, so the marquee band is already in view on
+     the first screen — it invites the scroll instead of hiding below the fold. */
+  min-height: max(560px, calc(100vh - 150px));
+  min-height: max(560px, calc(100svh - 150px));
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -31,7 +33,7 @@
   width: 100%;
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 120px var(--gutter) 80px;
+  padding: calc(var(--nav-h) + 88px) var(--gutter) 72px;
   /* The copy is stacked above the sticker layer and spans the whole hero: let the
      pointer through to the stickers (hover wobble, the DELETE one's click), except
      on the CTAs. The hero text isn't selectable anyway. */
@@ -41,13 +43,6 @@
 .inner a,
 .inner button {
   pointer-events: auto;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 28px;
 }
 
 .title {
@@ -80,7 +75,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 96px;
+  margin-top: 48px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
