@@ -10,12 +10,14 @@ import { HeroMarquee } from '@/components/sections/HeroMarquee';
 import { Hobbies } from '@/components/sections/Hobbies';
 import { Projects } from '@/components/sections/Projects';
 import { VolleyballSection } from '@/components/sections/VolleyballSection';
+import { Terminal } from '@/components/terminal/Terminal';
 import { VolleyFab } from '@/components/volleyball/VolleyFab';
 
 /**
  * Page composition:
- * Hero → marquee band (the hand-off into the page) → 01 Bio → 02 Projects →
- * 03 Hobbies (a: AI, b: 3D car, c: volleyball, d: games) → 04 Contact + footer.
+ * Hero → marquee band (the hand-off into the page) → Bio → Projects →
+ * Hobbies (AI, 3D car, volleyball, games) → Contact + footer.
+ * Overlays: the volleyball button and the terminal (hero button or ' / ~ keys).
  *
  * The page itself is a Server Component; each section is a small Client
  * Component that reads copy from the i18n context.
@@ -36,6 +38,7 @@ export default function Page() {
         <Contact />
       </LocaleTransition>
       <VolleyFab />
+      <Terminal />
       <Cursor />
     </>
   );

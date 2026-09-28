@@ -7,7 +7,7 @@ import { RotatingText } from '@/components/fun/RotatingText';
 import { Reveal } from '@/components/motion/Reveal';
 import { ArrowDown, ArrowRight } from '@/components/ui/icons';
 import { useI18n } from '@/i18n/I18nProvider';
-import { openVolleyball } from '@/lib/volleyball';
+import { openTerminal } from '@/lib/terminal';
 import styles from './Hero.module.css';
 
 type Tone = 'danger' | 'warn' | 'ok';
@@ -187,16 +187,15 @@ export function Hero() {
             </a>
           </Magnetic>
           <Magnetic>
-            <a
-              className="btn btn-secondary btn-lg"
-              href="#volei"
-              onClick={(e) => {
-                e.preventDefault();
-                openVolleyball();
-              }}
-            >
-              🏐 {t.hero.cta2}
-            </a>
+            <button type="button" className={`btn btn-secondary btn-lg ${styles.termBtn}`} onClick={openTerminal}>
+              <span className={styles.termIcon} aria-hidden="true">
+                &gt;
+              </span>
+              {t.hero.cta2}
+              <kbd className={styles.kbd} aria-hidden="true">
+                ~
+              </kbd>
+            </button>
           </Magnetic>
         </Reveal>
 

@@ -35,6 +35,14 @@ Os dois saem dos mesmos dicionários da página (`src/lib/resume.ts`), então nu
 curl https://seu-dominio.com/api/nathan?lang=pt
 ```
 
+### Terminal
+
+O botão **Abrir terminal** do topo (ou as teclas `'` / `~` em qualquer lugar da página) abre um terminal no centro da
+tela. Na primeira vez ele digita `help` sozinho e lista os comandos, todos clicáveis: `whoami`, `ls projetos`,
+`cat experiencia.txt`, `curl /api/nathan` (chama a API de verdade), `open curriculo.pdf`, `sudo contratar nathan` 🎉,
+`volei`, `rm -rf /` e outros. Comandos desconhecidos respondem que _o sistema não estava esperando tanta
+criatividade_. A lógica dos comandos fica em `src/components/terminal/engine.ts` (pura, com testes).
+
 **Pela linha de comando**
 
 ```bash
