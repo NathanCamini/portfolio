@@ -6,21 +6,51 @@ scroll e um **mini-jogo de vôlei de praia**.
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000 → redireciona para /pt ou /en
+npm run dev        # http://localhost:3000 → abre em /pt ou /en conforme o idioma do sistema
 npm run check      # typecheck + lint + testes
-npm run build && npm start
+npm run preview    # build estático + servidor local da Cloudflare (wrangler) em :8787
+npm run deploy     # build estático + publicação no Cloudflare Workers
 ```
 
-Requer Node ≥ 20.9. Em produção, defina `NEXT_PUBLIC_SITE_URL` (URLs canônicas, Open Graph, sitemap).
+Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção.
+
+## Deploy na Cloudflare
+
+O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker (sem código de servidor):
+`/pt` → `pt.html`, barra final redirecionada, URLs desconhecidas → `404.html` com status 404. O arquivo
+`public/_headers` define cache de 1 ano para `/_next/static/*` (arquivos com hash) e headers de segurança básicos.
+
+**Pela linha de comando**
+
+```bash
+npx wrangler login
+NEXT_PUBLIC_SITE_URL=https://seu-dominio.com npm run deploy
+```
+
+**Pelo painel (deploy a cada push)**: conecte o repositório a um Worker com build command `npm run build`, deploy
+command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
+
+> `NEXT_PUBLIC_SITE_URL` é lida **no build** (URLs canônicas, Open Graph, `sitemap.xml`, `robots.txt`). Sem ela,
+> essas URLs saem como `http://localhost:3000`.
+
+### Idioma
+
+- `/` escolhe o idioma pela **configuração do sistema** do visitante (`navigator.languages`, na ordem de
+  preferência): `pt-*` → `/pt`, `en-*` → `/en`, qualquer outro → `/en` (`fallbackLocale` em `src/i18n/config.ts`).
+  Um script inline no `<head>` redireciona antes de pintar a página; sem JavaScript, `/` mostra os botões
+  **Português / English**.
+- Links diretos para `/pt` ou `/en` sempre abrem no idioma do link.
+- O seletor PT/EN da navbar continua livre a qualquer momento.
 
 ## Stack
 
 | Pacote                                       | Papel                                                                        |
 | -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `next` 16 (App Router)                       | SSG de `/pt` e `/en`, metadata/SEO, `proxy.ts` para detecção de idioma       |
+| `next` 16 (App Router)                       | Export estático de `/pt` e `/en`, metadata/SEO                               |
 | `react` 19                                   | UI                                                                           |
 | `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
 | `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
+| `wrangler`                                   | Preview local e deploy no Cloudflare Workers                                 |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
 Sem Tailwind e sem biblioteca de i18n: os tokens do design system vivem em `globals.css` (CSS Modules por seção)
@@ -31,13 +61,14 @@ e as traduções são objetos TypeScript tipados.
 ```
 src/
 ├─ app/
+│  ├─ (root)/                # "/" → /pt ou /en pelo idioma do sistema (sem JS: botões PT/EN)
 │  ├─ [lang]/layout.tsx      # <html lang>, fonte Inter, metadata + hreflang, SSG de pt/en
 │  ├─ [lang]/page.tsx        # composição das seções
+│  ├─ global-not-found.tsx   # 404 bilíngue (out/404.html)
 │  ├─ globals.css            # tokens Nocturne + classes .btn/.card/.tag/.seg
-│  ├─ sitemap.ts, robots.ts
-├─ proxy.ts                  # "/" → /pt ou /en (cookie > Accept-Language > padrão)
+│  ├─ fonts.ts, sitemap.ts, robots.ts
 ├─ config/site.ts            # nome, e-mail, redes, cor/acabamento do carro, dificuldade do jogo
-├─ i18n/                     # config, tipos, dicionários pt/en, I18nProvider (troca sem remontar)
+├─ i18n/                     # config, detect (idioma do sistema), dicionários pt/en, I18nProvider
 ├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts
 ├─ hooks/                    # useTypewriter, useMediaQuery
 └─ components/
@@ -78,8 +109,9 @@ causam nenhum re-render do React (Motion values e refs lidos no `useFrame`).
 sem a bola atravessar a rede), IA que prevê o ponto de queda, quadra lógica 960×540 com letterbox. O teclado só é
 capturado com o painel visível. Tela cheia pela Fullscreen API; controles touch em telas `pointer: coarse`.
 
-**i18n.** `/pt` e `/en` são pré-renderizados (SEO + hreflang). A troca de idioma é estado no cliente +
-`history.replaceState`: o texto muda na hora e **nada remonta** — a partida e a posição do carro continuam.
+**i18n.** `/pt` e `/en` são pré-renderizados (SEO + hreflang; `x-default` aponta para `/`, que detecta o idioma
+do sistema). A troca de idioma é estado no cliente + `history.replaceState`: o texto muda na hora e **nada remonta**
+— a partida e a posição do carro continuam.
 
 **Acessibilidade.** `prefers-reduced-motion` respeitado globalmente (`MotionConfig`), carro controlável por
 teclado (setas / Home), texto do terminal de IA exposto por inteiro a leitores de tela, foco gerenciado no jogo.
