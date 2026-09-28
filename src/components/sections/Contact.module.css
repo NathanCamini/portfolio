@@ -36,10 +36,13 @@
   margin: 0 auto;
   max-width: var(--page-max);
   display: flex;
-  flex-wrap: wrap;
+  /* Always one line: the size is derived from the space available instead of wrapping. */
+  flex-wrap: nowrap;
   justify-content: center;
   font-weight: 700;
-  font-size: clamp(56px, 13vw, 190px);
+  /* "Nathan Camini" is ≈6.6em wide in Inter 700 at this tracking; dividing the usable
+     width by 7 keeps a little slack (e.g. while the web font is still loading). */
+  font-size: clamp(36px, calc(min(100vw - 2 * var(--gutter), var(--page-max)) / 7), 190px);
   line-height: 0.95;
   letter-spacing: -0.05em;
   white-space: nowrap;

@@ -82,6 +82,13 @@
   position: absolute;
 }
 
+/* Stickers react to hover even though the layer itself lets clicks through. */
+.token,
+.emoji {
+  pointer-events: auto;
+  cursor: default;
+}
+
 .token {
   display: inline-block;
   padding: 6px 12px;
@@ -100,6 +107,32 @@
   display: inline-block;
   font-size: 34px;
   filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
+}
+
+/* Status-coloured stickers: a destructive query, fake-success, a 404… */
+.danger {
+  color: #ff8a95;
+  border-color: color-mix(in srgb, #ff5a6a 55%, transparent);
+  background: color-mix(in srgb, #3a1820 75%, transparent);
+}
+
+.warn {
+  color: #f5d27a;
+  border-color: color-mix(in srgb, #f5c542 50%, transparent);
+  background: color-mix(in srgb, #33290f 75%, transparent);
+}
+
+.ok {
+  color: #8be3b0;
+  border-color: color-mix(in srgb, #3ddc84 50%, transparent);
+  background: color-mix(in srgb, #10301f 75%, transparent);
+}
+
+/* Long stickers need room: hidden until the viewport is wide enough. */
+@media (max-width: 1199px) {
+  .wide {
+    display: none;
+  }
 }
 
 /* Stickers sit to the right of the headline; on narrow screens they would cover it. */
