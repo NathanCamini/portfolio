@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { notFound } from 'next/navigation';
+import { CloudflareAnalytics } from '@/components/CloudflareAnalytics';
 import { Providers } from '@/components/Providers';
 import { site } from '@/config/site';
 import { htmlLang, isLocale, locales } from '@/i18n/config';
@@ -51,6 +52,7 @@ export default async function RootLayout({ children, params }: LayoutProps<'/[la
     <html lang={htmlLang[lang]} className={inter.variable}>
       <body>
         <Providers locale={lang}>{children}</Providers>
+        <CloudflareAnalytics />
       </body>
     </html>
   );

@@ -69,6 +69,20 @@ command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
 > `NEXT_PUBLIC_SITE_URL` é lida **no build** (URLs canônicas, Open Graph, `sitemap.xml`, `robots.txt`). Sem ela,
 > essas URLs saem como `http://localhost:3000`.
 
+### Analytics (Cloudflare Web Analytics)
+
+Sem cookies e sem dados pessoais, então não precisa de banner de consentimento. Fica **desligado** até existir a
+variável de build `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (`src/components/CloudflareAnalytics.tsx`):
+
+1. Painel da Cloudflare → **Web Analytics** → **Add a site** → informe o domínio do site → escolha o snippet JS
+   manual e copie só o valor de `"token"`.
+2. No Worker: **Settings → Build → Variables and secrets** → adicione `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` com esse
+   valor (tem que ser variável de **build**, não de runtime).
+3. Faça um novo deploy. O script `beacon.min.js` passa a aparecer no fim do `<body>` de `/pt`, `/en` e da página 404.
+
+Não ative ao mesmo tempo a "instalação automática" do Web Analytics para o mesmo domínio, senão as visitas contam
+em dobro.
+
 ### Idioma
 
 - `/` escolhe o idioma pela **configuração do sistema** do visitante (`navigator.languages`, na ordem de
