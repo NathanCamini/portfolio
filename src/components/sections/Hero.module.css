@@ -1,7 +1,9 @@
 .hero {
   position: relative;
-  min-height: 100vh;
-  min-height: 100svh;
+  /* A bit shorter than the viewport, so the marquee band is already in view on
+     the first screen — it invites the scroll instead of hiding below the fold. */
+  min-height: max(560px, calc(100vh - 150px));
+  min-height: max(560px, calc(100svh - 150px));
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -31,7 +33,7 @@
   width: 100%;
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 120px var(--gutter) 80px;
+  padding: calc(var(--nav-h) + 48px) var(--gutter) 72px;
   /* The copy is stacked above the sticker layer and spans the whole hero: let the
      pointer through to the stickers (hover wobble, the DELETE one's click), except
      on the CTAs. The hero text isn't selectable anyway. */
@@ -80,7 +82,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 96px;
+  margin-top: 48px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -181,7 +183,8 @@
   font-family: var(--font-heading);
   gap: 10px;
   border-color: color-mix(in srgb, #7ee2a8 45%, transparent);
-  box-shadow: 0 0 24px -8px color-mix(in srgb, #7ee2a8 60%, transparent);
+  /* No negative spread: that shrinks the glow and leaves the rounded corners bare. */
+  box-shadow: 0 0 18px color-mix(in srgb, #7ee2a8 22%, transparent);
   transition:
     box-shadow 0.2s,
     border-color 0.2s,
@@ -190,7 +193,7 @@
 
 .termBtn:hover {
   border-color: #7ee2a8;
-  box-shadow: 0 0 32px -6px color-mix(in srgb, #7ee2a8 70%, transparent);
+  box-shadow: 0 0 26px color-mix(in srgb, #7ee2a8 38%, transparent);
 }
 
 .termIcon {

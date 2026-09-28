@@ -13,7 +13,7 @@ export const en: Dictionary = {
     tag1: 'Back-end · APIs & systems',
     tag2: 'Grad school: AI & MLOps',
     titleLead: 'I build systems that',
-    titleWords: ['take the heat.', 'scale without drama.', 'don’t page you at 3 a.m.', 'make the front end smile.'],
+    titleWords: ['take the heat.', 'scale without drama.', 'don’t page at 3 a.m.', 'make the front end smile.'],
     sub: 'Software developer at Tramontina with a degree in Systems Analysis and Development, now in graduate school for AI Engineering and MLOps. Day to day: APIs, legacy systems and integrations. Here, the playground: open the terminal, scroll the page, drag the car, play a match.',
     cta1: 'See projects',
     cta2: 'Open terminal',
