@@ -5,7 +5,7 @@ export const en: Dictionary = {
   meta: {
     title: 'Nathan Camini — Back-end developer',
     description:
-      'Portfolio of Nathan Camini: software developer at Tramontina, with a degree in Systems Analysis and Development (IFRS), now in graduate school for AI Engineering and MLOps (PUC Minas). APIs, legacy systems, a 3D 911 GT3 RS and two mini-games.',
+      'Portfolio of Nathan Camini: software developer at Tramontina, with a degree in Systems Analysis and Development (IFRS), now in graduate school for AI Engineering and MLOps (PUC Minas). APIs, legacy systems, a neon 911 GT3 RS and two mini-games.',
   },
   nav: { bio: 'Bio', projects: 'Projects', hobbies: 'Hobbies', contact: 'Contact', language: 'Language' },
   hero: {
@@ -185,6 +185,13 @@ export const en: Dictionary = {
     loading: 'Loading Three.js…',
     error: 'WebGL could not be loaded.',
     canvasLabel: '3D Porsche 911 GT3 RS. Scroll the page to move it and drag to rotate it.',
+    neon: {
+      title: 'A neon 911 GT3 RS that accelerates with the scroll.',
+      body: 'Scroll the page: it draws itself line by line, speeds up and crosses the screen. The faster you scroll, the faster it goes — the speedometer doesn’t lie.',
+      hint: 'Scroll faster to accelerate',
+      label: 'Neon line drawing of a Porsche 911 GT3 RS in profile, moving with the page scroll.',
+      speed: 'speed',
+    },
   },
   volleyball: {
     label: 'Beach volleyball',

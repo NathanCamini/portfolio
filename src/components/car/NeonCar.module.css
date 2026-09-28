@@ -1,0 +1,196 @@
+.wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.car {
+  flex: none;
+  width: min(1180px, 118vw);
+  margin-top: 12vh;
+  will-change: transform;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.body,
+.line,
+.tire,
+.caliper,
+.taillight {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.body {
+  stroke: url(#neon-body);
+  stroke-width: 3;
+}
+
+.line {
+  stroke: #bae6fd;
+  stroke-width: 2;
+}
+
+.tire {
+  stroke: url(#neon-body);
+  stroke-width: 5;
+}
+
+.hub {
+  fill: #e0f2fe;
+}
+
+.caliper {
+  stroke: #fbbf24;
+  stroke-width: 4;
+}
+
+.headlight {
+  fill: #f0f9ff;
+}
+
+.taillight {
+  stroke: #ff4d6d;
+  stroke-width: 5;
+}
+
+.shadow {
+  fill: #7dd3fc;
+  filter: blur(14px);
+  opacity: 0.35;
+}
+
+.speedLines line {
+  stroke: #7dd3fc;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 60 40;
+  animation: streak 0.35s linear infinite;
+  opacity: 0.7;
+}
+
+@keyframes streak {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+/* Road: a glowing line with dashes that stream past */
+.road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 20%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(125 211 252 / 0.35) 20%,
+    rgb(167 139 250 / 0.35) 80%,
+    transparent
+  );
+  overflow: hidden;
+}
+
+.dashes {
+  position: absolute;
+  inset: -1px -240px;
+  background: repeating-linear-gradient(90deg, rgb(224 242 254 / 0.9) 0 40px, transparent 40px 120px);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+
+.gauge {
+  position: absolute;
+  right: max(var(--gutter), calc((100% - var(--page-max)) / 2 + var(--gutter)));
+  top: 120px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dial {
+  width: 96px;
+  height: 64px;
+}
+
+.dialTrack,
+.dialFill {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.dialTrack {
+  stroke: var(--color-neutral-800);
+}
+
+.dialFill {
+  stroke: #7dd3fc;
+  filter: drop-shadow(0 0 4px #7dd3fc);
+}
+
+.needle {
+  stroke: #ff4d6d;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+}
+
+.kmh {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: #e0f2fe;
+  text-shadow: 0 0 12px rgb(125 211 252 / 0.8);
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+}
+
+.unit {
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-400);
+}
+
+@media (max-width: 720px) {
+  .car {
+    width: 165vw;
+    margin-top: 14vh;
+  }
+  .gauge {
+    top: auto;
+    bottom: 96px;
+    right: var(--gutter);
+  }
+  .dial {
+    width: 72px;
+    height: 48px;
+  }
+  .kmh {
+    font-size: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speedLines line {
+    animation: none;
+  }
+}
