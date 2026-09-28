@@ -252,6 +252,23 @@ export const en: Dictionary = {
     label: 'Contact',
     title: 'Got a system to scale or a bug that is weird enough? Let’s talk.',
   },
+  cv: {
+    title: 'Résumé',
+    blurb: 'Education, experience and stack on a single page — or as JSON, if you’re a back-end person too.',
+    download: 'Download résumé (PDF)',
+    apiHint: 'Prefer an API?',
+    openJson: 'Open JSON',
+    copy: 'Copy command',
+    copied: 'Copied!',
+    headline: 'Software developer · back-end',
+    summary:
+      'Software developer with experience in legacy systems (Genero), REST APIs in .NET/C# and Next.js applications. Holds a degree in Systems Analysis and Development from IFRS and is in graduate school for AI Engineering and MLOps at PUC Minas. Before development, worked in IT support for the Brazilian Army and in industrial sales, which built a foundation in infrastructure and in understanding what clients really need.',
+    summaryLabel: 'Summary',
+    skillsLabel: 'Skills',
+    stackLabel: 'Stack',
+    pdfFooter: 'Also available as JSON: GET /api/nathan',
+    docTitle: 'Résumé — Nathan Camini',
+  },
   footer: {
     role: 'Back-end developer',
     backToTop: 'Back to top',

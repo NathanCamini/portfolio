@@ -1,0 +1,209 @@
+/* Animated gradient border: the angle is a registered property so it can be tweened. */
+@property --resume-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.bar {
+  display: grid;
+  /* minmax(0, …) so the unbreakable curl command scrolls instead of widening the card. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px 32px;
+  padding: 24px 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)), var(--color-surface) 60%)
+      padding-box,
+    conic-gradient(
+        from var(--resume-angle),
+        var(--color-accent-800),
+        var(--color-accent),
+        var(--color-accent-300),
+        var(--color-accent),
+        var(--color-accent-800)
+      )
+      border-box;
+  box-shadow: 0 18px 50px -20px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  animation: spin-border 6s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin-border {
+  to {
+    --resume-angle: 360deg;
+  }
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.blurb {
+  margin: 6px 0 0;
+  color: var(--color-neutral-300);
+  line-height: 1.5;
+  max-width: 56ch;
+}
+
+/* The highlighted action: filled accent, with a light sweep every few seconds. */
+.download {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: #15131f;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent-300) 60%, transparent),
+    0 10px 30px -8px var(--color-accent);
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.download::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: sweep 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sweep {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.download:hover {
+  background: var(--color-accent-400);
+  box-shadow:
+    0 0 0 1px var(--color-accent-300),
+    0 14px 40px -6px var(--color-accent);
+}
+
+.download:focus-visible {
+  outline: 2px solid var(--color-accent-300);
+  outline-offset: 3px;
+}
+
+.api {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--color-divider);
+}
+
+.apiHint {
+  font-size: 13px;
+  color: var(--color-neutral-400);
+}
+
+.cmd {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--color-neutral-800);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg) 70%, black);
+}
+
+.code {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-neutral-200);
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The command should be copy-pasteable even though the hero disables selection. */
+  user-select: all;
+}
+
+.prompt {
+  color: var(--color-accent);
+  user-select: none;
+}
+
+.copy {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--color-neutral-800);
+  background: transparent;
+  color: var(--color-neutral-300);
+  cursor: pointer;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.copy:hover {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.open:hover {
+  text-decoration: underline;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .bar {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 20px;
+  }
+  .download {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar,
+  .download::after {
+    animation: none;
+  }
+}

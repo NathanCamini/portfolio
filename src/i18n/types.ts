@@ -174,6 +174,25 @@ export interface Dictionary {
     label: string;
     title: string;
   };
+  /** Résumé: the download bar next to the experience timeline, the PDF and the JSON API. */
+  cv: {
+    title: string;
+    blurb: string;
+    download: string;
+    apiHint: string;
+    openJson: string;
+    copy: string;
+    copied: string;
+    /** One-line professional headline under the name (PDF and API). */
+    headline: string;
+    summary: string;
+    summaryLabel: string;
+    skillsLabel: string;
+    stackLabel: string;
+    /** Last line of the PDF. */
+    pdfFooter: string;
+    docTitle: string;
+  };
   footer: {
     role: string;
     backToTop: string;

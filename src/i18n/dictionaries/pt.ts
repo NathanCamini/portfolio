@@ -252,6 +252,23 @@ export const pt: Dictionary = {
     label: 'Contato',
     title: 'Tem um sistema para escalar ou um bug estranho o suficiente? Vamos conversar.',
   },
+  cv: {
+    title: 'Currículo',
+    blurb: 'Formação, experiência e stack em uma folha — ou em JSON, se você for do back-end também.',
+    download: 'Baixar currículo (PDF)',
+    apiHint: 'Prefere via API?',
+    openJson: 'Abrir JSON',
+    copy: 'Copiar comando',
+    copied: 'Copiado!',
+    headline: 'Desenvolvedor de software · back-end',
+    summary:
+      'Desenvolvedor de software com experiência em sistemas legados (Genero), APIs REST em .NET/C# e aplicações Next.js. Formado em Análise e Desenvolvimento de Sistemas pelo IFRS e pós-graduando em Engenharia de IA e MLOps pela PUC Minas. Antes do desenvolvimento, passei pelo suporte de TI do Exército e por vendas industriais, o que me deu base em infraestrutura e em entender o que o cliente realmente precisa.',
+    summaryLabel: 'Resumo',
+    skillsLabel: 'Competências',
+    stackLabel: 'Stack',
+    pdfFooter: 'Também disponível em JSON: GET /api/nathan',
+    docTitle: 'Currículo — Nathan Camini',
+  },
   footer: {
     role: 'Desenvolvedor back-end',
     backToTop: 'Voltar ao topo',
