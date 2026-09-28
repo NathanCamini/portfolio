@@ -51,18 +51,37 @@ export interface GameStrings {
   again: string;
 }
 
+/** Copy drawn inside the Siege-style aim trainer canvas. */
+export interface TrainerStrings {
+  title: string;
+  start: string;
+  score: string;
+  time: string;
+  streak: string;
+  headshot: string;
+  hostage: string;
+  rank: string;
+  best: string;
+  again: string;
+}
+
 export interface Dictionary {
   meta: { title: string; description: string };
   nav: { bio: string; projects: string; hobbies: string; contact: string; language: string };
   hero: {
     tag1: string;
     tag2: string;
-    title: string;
+    /** Fixed start of the headline… */
+    titleLead: string;
+    /** …followed by endings that rotate with a letter-by-letter animation. */
+    titleWords: string[];
     sub: string;
     cta1: string;
     cta2: string;
     scrollHint: string;
   };
+  /** Words scrolling in the band between the hero and the bio. */
+  marquee: string[];
   bio: {
     label: string;
     title: string;
@@ -116,11 +135,31 @@ export interface Dictionary {
     right: string;
     controls: string;
     canvasLabel: string;
+    badge: string;
+    play: string;
+    fab: string;
+    teaserAlt: string;
     game: GameStrings;
+  };
+  games: {
+    label: string;
+    title: string;
+    body: string;
+    mainLabel: string;
+    mains: { name: string; role: string }[];
+    facts: { value: string; label: string }[];
+    trainerTitle: string;
+    trainerBody: string;
+    controls: string;
+    canvasLabel: string;
+    trainer: TrainerStrings;
   };
   contact: {
     label: string;
     title: string;
-    footNote: string;
+  };
+  footer: {
+    role: string;
+    backToTop: string;
   };
 }

@@ -1,0 +1,24 @@
+.tilt {
+  position: relative;
+  display: flex;
+  flex: 1;
+  transform-style: preserve-3d;
+  border-radius: var(--radius-md);
+}
+
+.tilt > :first-child {
+  flex: 1;
+}
+
+.glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tilt:hover .glare {
+  opacity: 1;
+}

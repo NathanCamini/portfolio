@@ -11,4 +11,7 @@
     // Unknown paths get out/404.html with a real 404 status.
     "not_found_handling": "404-page",
   },
+  // Required by `wrangler preview`, which Cloudflare's Git integration runs for
+  // non-production branches. Empty = reuse the top-level settings above.
+  "previews": {},
 }

@@ -40,7 +40,18 @@ export function createMaterials(paintColor: string, finish: PaintFinish = 'metal
   const trim = new MeshStandardMaterial({ name: 'trim', color: '#0d0e13', roughness: 0.55, metalness: 0.2 });
   const underbody = new MeshStandardMaterial({ name: 'underbody', color: '#050609', roughness: 0.95 });
   const rubber = new MeshStandardMaterial({ name: 'rubber', color: '#121317', roughness: 0.88 });
-  const alloy = new MeshStandardMaterial({ name: 'alloy', color: '#8d929c', metalness: 0.9, roughness: 0.28 });
+  // Clear-coated carbon fibre: hood centre, wing, skirts, splitter, canards.
+  const carbon = new MeshPhysicalMaterial({
+    name: 'carbon',
+    color: '#15171c',
+    metalness: 0.35,
+    roughness: 0.42,
+    clearcoat: 1,
+    clearcoatRoughness: 0.08,
+  });
+  // Forged wheels in satin dark platinum, centre-lock nut in bright metal.
+  const alloy = new MeshStandardMaterial({ name: 'alloy', color: '#3c4049', metalness: 0.85, roughness: 0.35 });
+  const nut = new MeshStandardMaterial({ name: 'centre_lock', color: '#d23a2a', metalness: 0.6, roughness: 0.3 });
   const alloyDark = new MeshStandardMaterial({
     name: 'alloy_dark',
     color: '#2a2d34',
@@ -50,7 +61,8 @@ export function createMaterials(paintColor: string, finish: PaintFinish = 'metal
   });
   const chrome = new MeshStandardMaterial({ name: 'chrome', color: '#d8dce4', metalness: 1, roughness: 0.14 });
   const brakeDisc = new MeshStandardMaterial({ name: 'brake_disc', color: '#6b6f78', metalness: 0.8, roughness: 0.45 });
-  const caliper = new MeshStandardMaterial({ name: 'caliper', color: '#c8102e', metalness: 0.2, roughness: 0.4 });
+  // PCCB ceramic brakes: yellow calipers.
+  const caliper = new MeshStandardMaterial({ name: 'caliper', color: '#e2b714', metalness: 0.2, roughness: 0.4 });
   const housing = new MeshStandardMaterial({ name: 'lamp_housing', color: '#15171d', metalness: 0.8, roughness: 0.25 });
   const lens = new MeshPhysicalMaterial({
     name: 'lamp_lens',
@@ -73,8 +85,10 @@ export function createMaterials(paintColor: string, finish: PaintFinish = 'metal
     glass,
     trim,
     underbody,
+    carbon,
     rubber,
     alloy,
+    nut,
     alloyDark,
     chrome,
     brakeDisc,
@@ -90,8 +104,10 @@ export function createMaterials(paintColor: string, finish: PaintFinish = 'metal
     glass,
     trim,
     underbody,
+    carbon,
     rubber,
     alloy,
+    nut,
     alloyDark,
     chrome,
     brakeDisc,

@@ -3,58 +3,178 @@
   padding-bottom: 40px;
 }
 
-.toggle {
-  all: unset;
-  box-sizing: border-box;
+/* The "arcade stage": copy + big animated poster, framed by a glowing border. */
+.stage {
+  position: relative;
   margin-top: 16px;
-  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   align-items: center;
-  gap: 24px;
+  gap: 32px;
   padding: 32px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  cursor: pointer;
-  transition:
-    box-shadow 0.3s,
-    background 0.3s;
+  border-radius: calc(var(--radius-lg) * 1.4);
+  background:
+    radial-gradient(ellipse at 80% 20%, color-mix(in srgb, var(--color-accent) 22%, transparent), transparent 60%),
+    var(--color-surface);
+  isolation: isolate;
 }
 
-.toggle:hover {
-  box-shadow:
-    inset 0 0 0 1px var(--color-accent),
-    0 0 40px color-mix(in srgb, var(--color-accent) 18%, transparent);
+/* Animated conic border (the glow runs around the card). */
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--angle, 0deg),
+    var(--color-accent),
+    transparent 30%,
+    #6fb7ff 50%,
+    transparent 70%,
+    var(--color-accent)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin 6s linear infinite;
 }
 
-.toggle:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin {
+  to {
+    --angle: 360deg;
+  }
 }
 
 .copy {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent-200);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3ddc84;
+  box-shadow: 0 0 0 0 rgba(61, 220, 132, 0.7);
+  animation: live 1.6s ease-out infinite;
+}
+
+@keyframes live {
+  to {
+    box-shadow: 0 0 0 10px rgba(61, 220, 132, 0);
+  }
 }
 
 .title {
-  font-weight: 500;
-  font-size: clamp(24px, 2.6vw, 32px);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
+  margin: 0;
+  font-weight: 600;
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
 .body {
-  max-width: 60ch;
-  font-size: 15px;
+  margin: 0;
+  max-width: 44ch;
+  font-size: 16px;
   line-height: 1.6;
   color: var(--color-neutral-300);
 }
 
-.cta {
-  white-space: nowrap;
+.play {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 16px 28px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-bg);
+  background: linear-gradient(135deg, var(--color-accent-300), var(--color-accent));
+  box-shadow: 0 10px 40px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  cursor: pointer;
+  transition:
+    transform 0.2s,
+    filter 0.2s;
+}
+
+.play:hover {
+  filter: brightness(1.08);
+}
+
+.play:active {
+  transform: scale(0.96);
+}
+
+.playOpen {
+  color: var(--color-text);
+  background: var(--color-neutral-800);
+  box-shadow: none;
+}
+
+/* Expanding ring that keeps inviting a click. */
+.pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--color-accent-300);
+  animation: pulse 1.8s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.35, 1.6);
+  }
+}
+
+.poster {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s;
+}
+
+.poster:hover {
+  transform: translateY(-4px) rotate(-0.5deg);
 }
 
 .expander {
@@ -65,12 +185,20 @@
   margin-top: 16px;
 }
 
-@media (max-width: 560px) {
-  .toggle {
+@media (max-width: 860px) {
+  .stage {
     grid-template-columns: 1fr;
     padding: 24px;
   }
-  .cta {
-    justify-self: start;
+  .poster {
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage::before,
+  .pulse,
+  .liveDot {
+    animation: none;
   }
 }

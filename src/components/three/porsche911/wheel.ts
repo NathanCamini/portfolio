@@ -22,7 +22,7 @@ export interface WheelSpec {
  *   mount   ← positioned at the axle, never rotates (holds the brake caliper)
  *    └ spin ← rotation.z is driven by distance travelled / radius
  *        ├ tyre (lathe profile with rounded shoulders)
- *        ├ rim barrel, lip, 5 twin spokes, hub
+ *        ├ forged rim: barrel, polished lip, 10 spokes, centre-lock nut
  *        └ brake disc
  *
  * Geometries are cached per spec so the 4 wheels share buffers.
@@ -69,37 +69,36 @@ export function createWheel(spec: WheelSpec, mats: CarMaterials, cache: Map<stri
   );
   const lip = new Mesh(
     geo('lip', () => new TorusGeometry(rr - 0.006, 0.011, 8, 56)),
-    mats.alloy,
+    mats.chrome,
   );
   lip.position.z = w / 2 - 0.012;
   spin.add(lip);
 
-  // Five twin spokes, slightly recessed from the lip.
-  const spokeGeo = geo('spoke', () => new BoxGeometry(rr - 0.07, 0.03, 0.028));
+  // Ten straight forged spokes, slightly recessed from the lip.
+  const spokeGeo = geo('spoke', () => new BoxGeometry(rr - 0.075, 0.026, 0.03));
   const faceZ = w / 2 - 0.035;
-  for (let i = 0; i < 5; i++) {
-    for (const offset of [-0.13, 0.13]) {
-      const a = (i / 5) * Math.PI * 2 + offset;
-      const spoke = new Mesh(spokeGeo, mats.alloy);
-      const mid = 0.06 + (rr - 0.07) / 2;
-      spoke.position.set(Math.cos(a) * mid, Math.sin(a) * mid, faceZ);
-      spoke.rotation.z = a;
-      spin.add(spoke);
-    }
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const spoke = new Mesh(spokeGeo, mats.alloy);
+    const mid = 0.065 + (rr - 0.075) / 2;
+    spoke.position.set(Math.cos(a) * mid, Math.sin(a) * mid, faceZ);
+    spoke.rotation.z = a;
+    spin.add(spoke);
   }
 
   const hub = new Mesh(
-    geo('hub', () => new CylinderGeometry(0.07, 0.075, 0.05, 28).rotateX(Math.PI / 2)),
+    geo('hub', () => new CylinderGeometry(0.075, 0.08, 0.05, 30).rotateX(Math.PI / 2)),
     mats.alloy,
   );
   hub.position.z = faceZ;
   spin.add(hub);
-  const cap = new Mesh(
-    geo('cap', () => new CylinderGeometry(0.036, 0.036, 0.056, 24).rotateX(Math.PI / 2)),
-    mats.trim,
+  // Centre-lock nut (a single hexagonal nut instead of five bolts, as on the RS).
+  const nut = new Mesh(
+    geo('nut', () => new CylinderGeometry(0.045, 0.045, 0.07, 6).rotateX(Math.PI / 2)),
+    mats.nut,
   );
-  cap.position.z = faceZ + 0.004;
-  spin.add(cap);
+  nut.position.z = faceZ + 0.01;
+  spin.add(nut);
 
   // Brake disc spins with the wheel…
   const disc = new Mesh(

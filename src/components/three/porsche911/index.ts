@@ -13,20 +13,18 @@ export interface Porsche911 {
   chassis: Group;
   /** Wheel spin groups with their rolling radius (front and rear differ). */
   wheels: { spin: Group; radius: number }[];
-  /** Deployable rear wing and its retracted height. */
-  spoiler: Group;
-  spoilerRestY: number;
-  spoilerRestTilt: number;
+  /** Rear wing DRS: 0 = closed (downforce) … 1 = open (low drag). */
+  setDrs: (open: number) => void;
   setPaint: (hex: string, finish?: PaintFinish) => void;
   dispose: () => void;
 }
 
 /**
- * Procedural Porsche 911 (992) — no external model file, ~20k triangles.
+ * Procedural Porsche 911 GT3 RS (992) — no external model file, ~20k triangles.
  * Pure Three.js (framework-agnostic): React only mounts `root`.
  *
  * To use a GLB instead, return the same `Porsche911` shape from a loader:
- * the rig in CarRig only relies on `chassis`, `wheels`, `spoiler`.
+ * the rig only relies on `chassis`, `wheels` and `setDrs`.
  */
 export function createPorsche911(paintColor: string, finish: PaintFinish = 'metallic'): Porsche911 {
   const mats = createMaterials(paintColor, finish);
@@ -43,8 +41,8 @@ export function createPorsche911(paintColor: string, finish: PaintFinish = 'meta
   root.add(chassis);
 
   const bodyGeometry = createBodyGeometry();
-  // Material order matches BODY_GROUP in body.ts: paint, glass, trim, underbody.
-  const body = new Mesh(bodyGeometry, [mats.paint, mats.glass, mats.trim, mats.underbody]);
+  // Material order matches BODY_GROUP in body.ts: paint, glass, trim, underbody, carbon.
+  const body = new Mesh(bodyGeometry, [mats.paint, mats.glass, mats.trim, mats.underbody, mats.carbon]);
   body.name = 'body';
   sprung.add(body);
 
@@ -73,9 +71,7 @@ export function createPorsche911(paintColor: string, finish: PaintFinish = 'meta
     root,
     chassis,
     wheels,
-    spoiler: details.spoiler,
-    spoilerRestY: details.spoilerRestY,
-    spoilerRestTilt: details.spoilerRestTilt,
+    setDrs: details.setDrs,
     setPaint: (hex, f = finish) => applyPaint(mats.paint, hex, f),
     dispose: () => {
       bodyGeometry.dispose();

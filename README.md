@@ -1,8 +1,8 @@
 # Nathan Camini — Portfólio
 
-Landing page bilíngue (PT/EN) construída a partir do design **Nocturne** (Claude Design): biografia, projetos
-(passados e futuros) e uma seção de hobbies com um laboratório de IA, um **Porsche 911 em Three.js** guiado pelo
-scroll e um **mini-jogo de vôlei de praia**.
+Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
+biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
+pelo scroll, um **mini-jogo de vôlei de praia** e um **Peek Trainer** no estilo Rainbow Six Siege.
 
 ```bash
 npm install
@@ -50,6 +50,7 @@ command `npx wrangler deploy` e a variável de build `NEXT_PUBLIC_SITE_URL`.
 | `react` 19                                   | UI                                                                           |
 | `motion` 13                                  | Reveals no scroll, stagger dos cards, parallax, barra de progresso, expansão |
 | `three` + `@react-three/fiber` 9             | Cena WebGL do carro (carregada sob demanda, fora do bundle inicial)          |
+| `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
 | `wrangler`                                   | Preview local e deploy no Cloudflare Workers                                 |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
@@ -73,6 +74,7 @@ src/
 ├─ hooks/                    # useTypewriter, useMediaQuery
 └─ components/
    ├─ motion/                # Reveal (whileInView), LocaleTransition, easing
+   ├─ fun/                   # RotatingText, Marquee (velocidade do scroll), Magnetic, Tilt, Cursor
    ├─ layout/Navbar          # nav fixa + seletor PT/EN + barra de progresso
    ├─ sections/              # Hero, Bio, Projects, Hobbies (IA), CarShowcase, VolleyballSection, Contact
    ├─ three/
@@ -81,6 +83,7 @@ src/
    │  ├─ CarRigController.ts # lógica scroll × rotação (TS puro, testado)
    │  ├─ useDragRotation.ts  # ponteiro/teclado → intenção de rotação
    │  └─ porsche911/         # modelo procedural: body (loft), wheel, details, materials
+   ├─ siege/                 # Peek Trainer: engine (TS puro, testado), render, componente
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
       ├─ useVolleyballGame.ts# loop de passo fixo, input, resize

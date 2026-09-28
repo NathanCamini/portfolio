@@ -3,7 +3,7 @@ import { DIM } from './dimensions';
 import { clamp, lerp, pchip, smoothstep } from './interp';
 
 /**
- * 911 body shell built as a LOFT: ~160 cross-sections along the car's length,
+ * 911 GT3 RS body shell built as a LOFT: ~160 cross-sections along the car's length,
  * each generated from a handful of "character lines" (roofline, beltline,
  * fender crests, plan-view width…) and stitched into one smooth mesh.
  *
@@ -29,99 +29,99 @@ import { clamp, lerp, pchip, smoothstep } from './interp';
 
 /** Centreline height: nose → hood → windshield → roof → fastback → ducktail. */
 export const roofLine = pchip([
-  [-2.32, 0.74],
-  [-2.27, 0.83],
-  [-2.18, 0.89],
-  [-2.08, 0.912],
-  [-1.95, 0.935],
-  [-1.75, 0.975],
-  [-1.4, 1.075],
-  [-1.05, 1.185],
-  [-0.75, 1.265],
-  [-0.45, 1.3],
-  [-0.2, 1.29],
-  [0.0, 1.235],
-  [0.3, 1.05],
-  [0.56, 0.875],
-  [0.72, 0.8],
-  [1.2, 0.745],
-  [1.7, 0.685],
-  [1.95, 0.64],
-  [2.1, 0.58],
-  [2.2, 0.5],
+  [-2.33, 0.74],
+  [-2.28, 0.84],
+  [-2.18, 0.9],
+  [-2.08, 0.922],
+  [-1.95, 0.945],
+  [-1.75, 0.985],
+  [-1.4, 1.085],
+  [-1.05, 1.195],
+  [-0.75, 1.275],
+  [-0.45, 1.31],
+  [-0.2, 1.3],
+  [0.0, 1.245],
+  [0.3, 1.055],
+  [0.56, 0.87],
+  [0.72, 0.79],
+  [1.2, 0.72],
+  [1.7, 0.655],
+  [1.98, 0.6],
+  [2.13, 0.52],
+  [2.24, 0.4],
 ]);
 
-/** Underside height (ground clearance, rising at the overhangs). */
+/** Underside height: low ride height, splitter-level nose, diffuser kick-up at the tail. */
 const floorLine = pchip([
-  [-2.32, 0.4],
+  [-2.33, 0.4],
   [-2.22, 0.3],
   [-2.06, 0.2],
-  [-1.85, 0.14],
-  [1.8, 0.13],
-  [2.0, 0.16],
-  [2.12, 0.21],
-  [2.2, 0.3],
+  [-1.85, 0.12],
+  [1.8, 0.11],
+  [2.05, 0.12],
+  [2.18, 0.15],
+  [2.24, 0.2],
 ]);
 
-/** Plan-view half width before nose/tail rounding — note the flared rear haunches. */
+/** Plan-view half width before nose/tail rounding — wide RS fenders front and rear. */
 const halfWidth = pchip([
-  [-2.32, 0.885],
-  [-2.1, 0.905],
-  [-1.75, 0.93],
-  [-1.3, 0.932],
-  [-0.85, 0.89],
-  [-0.4, 0.848],
-  [0.3, 0.845],
-  [0.8, 0.875],
-  [1.2, 0.888],
-  [1.65, 0.875],
-  [2.2, 0.84],
+  [-2.33, 0.9],
+  [-2.1, 0.925],
+  [-1.75, 0.95],
+  [-1.3, 0.955],
+  [-0.85, 0.9],
+  [-0.4, 0.858],
+  [0.3, 0.855],
+  [0.75, 0.9],
+  [1.2, 0.935],
+  [1.65, 0.915],
+  [2.24, 0.86],
 ]);
 
 /** Height at which the body is widest. */
 const sideHeight = pchip([
-  [-2.32, 0.6],
-  [-1.9, 0.62],
-  [-1.3, 0.6],
-  [-0.6, 0.52],
-  [0.5, 0.5],
-  [1.2, 0.5],
-  [1.9, 0.48],
-  [2.2, 0.42],
+  [-2.33, 0.58],
+  [-1.9, 0.6],
+  [-1.3, 0.58],
+  [-0.6, 0.48],
+  [0.5, 0.46],
+  [1.2, 0.48],
+  [1.9, 0.44],
+  [2.24, 0.34],
 ]);
 
-/** Shoulder / fender crest height. Above the hood at the front (fenders stand proud of it). */
+/** Shoulder / fender crest height. The front fenders stand well proud of the low hood. */
 const crestY = pchip([
-  [-2.32, 0.72],
-  [-2.15, 0.85],
-  [-1.9, 0.905],
-  [-1.4, 0.93],
-  [-1.0, 0.915],
+  [-2.33, 0.72],
+  [-2.15, 0.86],
+  [-1.9, 0.915],
+  [-1.4, 0.94],
+  [-1.0, 0.92],
   [-0.5, 0.895],
-  [0.2, 0.875],
+  [0.2, 0.872],
   [0.56, 0.86],
-  [0.9, 0.82],
-  [1.2, 0.815],
-  [1.55, 0.8],
-  [1.85, 0.765],
-  [2.05, 0.68],
-  [2.2, 0.52],
+  [0.9, 0.83],
+  [1.2, 0.83],
+  [1.55, 0.81],
+  [1.85, 0.77],
+  [2.08, 0.66],
+  [2.24, 0.42],
 ]);
 
 /** Lateral position of that crest. */
 const crestZ = pchip([
-  [-2.32, 0.72],
-  [-2.0, 0.76],
-  [-1.4, 0.79],
-  [-0.9, 0.79],
+  [-2.33, 0.73],
+  [-2.0, 0.78],
+  [-1.4, 0.81],
+  [-0.9, 0.8],
   [-0.3, 0.78],
   [0.3, 0.77],
-  [0.56, 0.74],
-  [0.8, 0.68],
-  [1.2, 0.655],
-  [1.7, 0.645],
-  [2.0, 0.62],
-  [2.2, 0.58],
+  [0.56, 0.75],
+  [0.8, 0.7],
+  [1.2, 0.68],
+  [1.7, 0.665],
+  [2.0, 0.64],
+  [2.24, 0.58],
 ]);
 
 // Section resolution.
@@ -254,7 +254,7 @@ function halfSection(x: number): [number, number][] {
 
 // ───────────────────────────── material zones ─────────────────────────────
 
-export const BODY_GROUP = { paint: 0, glass: 1, trim: 2, underbody: 3 } as const;
+export const BODY_GROUP = { paint: 0, glass: 1, trim: 2, underbody: 3, carbon: 4 } as const;
 
 /** Top-surface segment j (0 = at the crest) at station x: glass? */
 function isGlass(x: number, j: number) {
@@ -264,13 +264,17 @@ function isGlass(x: number, j: number) {
   return side && x > -1.5 && x < 0.56 && !(x > -0.98 && x < -0.92); // door + quarter glass, B-pillar gap
 }
 
+/** GT3 RS gills: slats across the top of the front fenders, two stations wide each. */
+const louvre = (x: number) => x > 0.9 && x < 1.5 && Math.floor((x - 0.9) / 0.056) % 2 === 0;
+
 function classify(x: number, seg: number, inArch: boolean): number {
   if (seg <= 2) return inArch && seg >= 1 ? BODY_GROUP.trim : BODY_GROUP.underbody;
   if (seg < CREST) {
     const lowerCorner = seg <= 3 + CORNER_N - 1;
     const bumperFace = seg === 3 + CORNER_N;
-    if (x > 2.0 && bumperFace) return BODY_GROUP.trim; // front air intakes
+    if (x > 2.02 && (bumperFace || seg === 3 + CORNER_N - 1)) return BODY_GROUP.trim; // central radiator intake
     if (x < -2.05 && lowerCorner) return BODY_GROUP.trim; // rear diffuser
+    if (x > -0.86 && x < 0.76 && seg <= 3 + 1) return BODY_GROUP.carbon; // carbon side skirts
     if ((x > 0.6 && x < 0.625) || (x > -0.935 && x < -0.91)) return BODY_GROUP.trim; // door shut lines
     return BODY_GROUP.paint;
   }
@@ -278,6 +282,10 @@ function classify(x: number, seg: number, inArch: boolean): number {
   if (isGlass(x, j)) return BODY_GROUP.glass;
   if (x > -1.02 && x < -0.98 && j >= SILL && j < SIDE_TOP) return BODY_GROUP.trim; // quarter-glass frame
   if (x < -1.86 && x > -2.1 && j >= UPPER + 1) return BODY_GROUP.trim; // engine-lid grille
+  // Ahead of the windshield the side-glass ring lines collapse, so the fender top is
+  // segments 0, SIDE_TOP and UPPER (u ≈ 0 → 0.28) and the hood proper starts after.
+  if ((j === 0 || j === SIDE_TOP || j === UPPER) && louvre(x)) return BODY_GROUP.trim; // fender-top louvres
+  if (x > 1.45 && x < 1.76 && (j === UPPER + 2 || j === UPPER + 3)) return BODY_GROUP.trim; // twin hood vents
   return BODY_GROUP.paint;
 }
 
@@ -309,7 +317,7 @@ export function createBodyGeometry(): BufferGeometry {
     }
   }
 
-  const buckets: number[][] = [[], [], [], []];
+  const buckets: number[][] = [[], [], [], [], []];
   for (let i = 0; i < xs.length - 1; i++) {
     const xm = (xs[i] + xs[i + 1]) / 2;
     const inArch = archMask[i] || archMask[i + 1];

@@ -1,18 +1,68 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { motion, useMotionValue, useScroll, useSpring, useTransform } from 'motion/react';
+import { motion, useMotionValue, useScroll, useSpring, useTransform, type MotionValue } from 'motion/react';
+import { Magnetic } from '@/components/fun/Magnetic';
+import { RotatingText } from '@/components/fun/RotatingText';
 import { Reveal } from '@/components/motion/Reveal';
 import { ArrowDown, ArrowRight } from '@/components/ui/icons';
 import { useI18n } from '@/i18n/I18nProvider';
+import { openVolleyball } from '@/lib/volleyball';
 import styles from './Hero.module.css';
 
+/** Back-end flavoured "stickers" floating around the headline, each at its own depth. */
+const TOKENS = [
+  { text: 'GET /api/v1', x: '72%', y: '18%', depth: 40, float: 9 },
+  { text: '200 OK', x: '86%', y: '38%', depth: 70, float: 12 },
+  { text: 'SELECT *', x: '64%', y: '64%', depth: 25, float: 8 },
+  { text: '{ "json": true }', x: '80%', y: '78%', depth: 55, float: 10 },
+  { text: 'queue.publish()', x: '58%', y: '30%', depth: 18, float: 7 },
+  { text: '🏎️', x: '92%', y: '14%', depth: 90, float: 14 },
+  { text: '🏐', x: '70%', y: '88%', depth: 80, float: 16 },
+  { text: '🎮', x: '95%', y: '60%', depth: 60, float: 11 },
+];
+
+function FloatingToken({
+  token,
+  px,
+  py,
+  index,
+}: {
+  token: (typeof TOKENS)[number];
+  px: MotionValue<number>;
+  py: MotionValue<number>;
+  index: number;
+}) {
+  const x = useTransform(px, (v) => v * token.depth);
+  const y = useTransform(py, (v) => v * token.depth);
+  const emoji = !/[a-z{]/i.test(token.text);
+  return (
+    <motion.span className={styles.tokenWrap} style={{ left: token.x, top: token.y, x, y }}>
+      <motion.span
+        className={emoji ? styles.emoji : styles.token}
+        initial={{ opacity: 0, scale: 0.6 }}
+        animate={{ opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? 4 : -4, 0] }}
+        transition={{
+          opacity: { delay: 0.8 + index * 0.08, duration: 0.6 },
+          scale: { delay: 0.8 + index * 0.08, duration: 0.6 },
+          y: { duration: 3 + (index % 3), repeat: Infinity, ease: 'easeInOut' },
+          rotate: { duration: 4 + (index % 2), repeat: Infinity, ease: 'easeInOut' },
+        }}
+      >
+        {token.text}
+      </motion.span>
+    </motion.span>
+  );
+}
+
 /**
- * Hero: pointer-following glow + scroll parallax + staggered reveals.
- * All motion is driven by Motion values (no React re-render per frame).
+ * Hero: rotating headline, floating back-end "stickers" with pointer parallax,
+ * magnetic CTAs, and a scroll-out transition (content shrinks, blurs and fades
+ * while the marquee band slides over it) so the hand-off to the Bio feels
+ * continuous instead of a hard cut. All motion runs on Motion values.
  */
 export function Hero() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const heroRef = useRef<HTMLElement>(null);
 
   // --- Glow follows the pointer (spring-smoothed), relative to the hero box.
@@ -40,24 +90,45 @@ export function Hero() {
     return () => window.removeEventListener('pointermove', onMove);
   }, [glowX, glowY, x, y]);
 
-  // --- Parallax: content drifts down at 25% of scroll speed during the first viewport.
-  const { scrollY } = useScroll();
-  const parallaxY = useTransform(scrollY, (v) =>
-    typeof window === 'undefined' ? 0 : Math.min(v, window.innerHeight) * 0.25,
-  );
+  // --- Pointer position normalised to -0.5…0.5 for the floating tokens' parallax.
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const spx = useSpring(px, { stiffness: 60, damping: 20 });
+  const spy = useSpring(py, { stiffness: 60, damping: 20 });
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      px.set(e.clientX / window.innerWidth - 0.5);
+      py.set(e.clientY / window.innerHeight - 0.5);
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [px, py]);
+
+  // --- Scroll-out transition: 0 while the hero fills the screen → 1 once it has left.
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const parallaxY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const fade = useTransform(scrollYProgress, [0.2, 0.8], [1, 0]);
+  const scale = useTransform(scrollYProgress, [0, 1], [1, 0.88]);
+  const blur = useTransform(scrollYProgress, [0.25, 0.85], ['blur(0px)', 'blur(10px)']);
 
   return (
     <section id="top" ref={heroRef} className={styles.hero}>
-      <motion.div className={styles.glow} style={{ x, y }} aria-hidden="true" />
+      <motion.div className={styles.glow} style={{ x, y, opacity: fade }} aria-hidden="true" />
 
-      <motion.div className={styles.inner} style={{ y: parallaxY }}>
+      <motion.div className={styles.tokens} style={{ opacity: fade }} aria-hidden="true">
+        {TOKENS.map((token, i) => (
+          <FloatingToken key={token.text} token={token} px={spx} py={spy} index={i} />
+        ))}
+      </motion.div>
+
+      <motion.div className={styles.inner} style={{ y: parallaxY, opacity: fade, scale, filter: blur }}>
         <Reveal delay={0} className={styles.tags}>
           <span className="tag tag-accent">{t.hero.tag1}</span>
           <span className="tag tag-neutral">{t.hero.tag2}</span>
         </Reveal>
 
         <Reveal as="h1" delay={120} className={styles.title}>
-          {t.hero.title}
+          {t.hero.titleLead} <RotatingText key={locale} words={t.hero.titleWords} />
         </Reveal>
 
         <Reveal as="p" delay={260} className={styles.sub}>
@@ -65,17 +136,34 @@ export function Hero() {
         </Reveal>
 
         <Reveal delay={400} className={styles.ctas}>
-          <a className="btn btn-primary btn-lg" href="#projetos">
-            {t.hero.cta1}
-            <ArrowRight />
-          </a>
-          <a className="btn btn-secondary btn-lg" href="#volei">
-            {t.hero.cta2}
-          </a>
+          <Magnetic>
+            <a className="btn btn-primary btn-lg" href="#projetos">
+              {t.hero.cta1}
+              <ArrowRight />
+            </a>
+          </Magnetic>
+          <Magnetic>
+            <a
+              className="btn btn-secondary btn-lg"
+              href="#volei"
+              onClick={(e) => {
+                e.preventDefault();
+                openVolleyball();
+              }}
+            >
+              🏐 {t.hero.cta2}
+            </a>
+          </Magnetic>
         </Reveal>
 
         <Reveal delay={700} className={styles.hint}>
-          <ArrowDown size={14} />
+          <motion.span
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ display: 'inline-flex' }}
+          >
+            <ArrowDown size={14} />
+          </motion.span>
           {t.hero.scrollHint}
         </Reveal>
       </motion.div>
