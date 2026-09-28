@@ -225,4 +225,16 @@ export interface Dictionary {
     role: string;
     backToTop: string;
   };
+  /** Easter egg: the hero's DELETE sticker runs and a psql session rolls it back. SQL stays in English. */
+  incident: {
+    /** HINT under the syntax error: why the `;` before WHERE deleted everything. */
+    hint: string;
+    /** SQL comments typed at the prompt (without the leading `-- `). */
+    lost: string;
+    relief: string;
+    lesson: string;
+    skip: string;
+    /** Screen-reader announcement (the terminal itself is decorative). */
+    announce: string;
+  };
 }

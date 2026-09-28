@@ -1,12 +1,21 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { motion, useMotionValue, useScroll, useSpring, useTransform, type MotionValue } from 'motion/react';
+import {
+  motion,
+  useMotionValue,
+  useScroll,
+  useSpring,
+  useTransform,
+  type MotionProps,
+  type MotionValue,
+} from 'motion/react';
 import { Magnetic } from '@/components/fun/Magnetic';
 import { RotatingText } from '@/components/fun/RotatingText';
 import { Reveal } from '@/components/motion/Reveal';
 import { ArrowDown, ArrowRight } from '@/components/ui/icons';
 import { useI18n } from '@/i18n/I18nProvider';
+import { DELETE_QUERY, executeQuery } from '@/lib/incident';
 import { openTerminal } from '@/lib/terminal';
 import styles from './Hero.module.css';
 
@@ -23,19 +32,23 @@ interface Token {
   tone?: Tone;
   /** Long stickers only appear on wide screens, where they don't cover the headline. */
   wide?: boolean;
+  /** Clickable sticker (a button) instead of a decorative one. */
+  onClick?: () => void;
 }
 
 /** Back-end flavoured "stickers" floating around the headline, each at its own depth. */
 const TOKENS: Token[] = [
   // The query is wrong on purpose (`DELETE *`, `;` before WHERE) — the emoji sells the joke.
+  // Easter egg: clicking it runs the query (see components/incident/QueryIncident).
   {
-    text: 'DELETE * from USERS; WHERE name = "NATHAN CAMINI" 🫢',
+    text: `${DELETE_QUERY} 🫢`,
     x: '47%',
     y: '9%',
     depth: 30,
     float: 6,
     tone: 'danger',
     wide: true,
+    onClick: executeQuery,
   },
   { text: 'GET /api/v1', x: '74%', y: '20%', depth: 40, float: 9 },
   { text: 'queue.publish()', x: '59%', y: '33%', depth: 18, float: 7 },
@@ -70,31 +83,37 @@ function FloatingToken({
     emoji ? styles.emoji : styles.token,
     token.tone ? styles[token.tone] : '',
     token.wide ? styles.wide : '',
+    token.onClick ? styles.clickable : '',
   ].join(' ');
+  const sticker = {
+    className,
+    // Poke a sticker and it wobbles.
+    whileHover: {
+      scale: 1.15,
+      rotate: index % 2 ? -8 : 8,
+      transition: { type: 'spring', stiffness: 400, damping: 10 },
+    },
+    initial: { opacity: 0, scale: 0.6 },
+    animate: { opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? 4 : -4, 0] },
+    transition: {
+      opacity: { delay: 0.8 + index * 0.08, duration: 0.6 },
+      scale: { delay: 0.8 + index * 0.08, duration: 0.6 },
+      y: { duration: 3 + (index % 3), repeat: Infinity, ease: 'easeInOut' },
+      rotate: { duration: 4 + (index % 2), repeat: Infinity, ease: 'easeInOut' },
+    },
+    children: token.text,
+  } satisfies MotionProps & { className: string; children: string };
   return (
     <motion.span
       className={`${styles.tokenWrap} ${token.wide ? styles.wide : ''}`}
       style={{ left: token.x, top: token.y, x, y }}
     >
-      <motion.span
-        className={className}
-        // Poke a sticker and it wobbles.
-        whileHover={{
-          scale: 1.15,
-          rotate: index % 2 ? -8 : 8,
-          transition: { type: 'spring', stiffness: 400, damping: 10 },
-        }}
-        initial={{ opacity: 0, scale: 0.6 }}
-        animate={{ opacity: 1, scale: 1, y: [0, -token.float, 0], rotate: [0, index % 2 ? 4 : -4, 0] }}
-        transition={{
-          opacity: { delay: 0.8 + index * 0.08, duration: 0.6 },
-          scale: { delay: 0.8 + index * 0.08, duration: 0.6 },
-          y: { duration: 3 + (index % 3), repeat: Infinity, ease: 'easeInOut' },
-          rotate: { duration: 4 + (index % 2), repeat: Infinity, ease: 'easeInOut' },
-        }}
-      >
-        {token.text}
-      </motion.span>
+      {token.onClick ? (
+        // Mouse-only surprise inside an aria-hidden layer: kept out of the tab order.
+        <motion.button {...sticker} type="button" tabIndex={-1} onClick={token.onClick} whileTap={{ scale: 0.9 }} />
+      ) : (
+        <motion.span {...sticker} />
+      )}
     </motion.span>
   );
 }

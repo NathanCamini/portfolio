@@ -1,0 +1,293 @@
+/* Full-screen layer above everything but the custom cursor (navbar 50, FAB 60, confetti 80,
+   terminal 90). Transparent: the page blocks glitching away and back are seen right through it. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  overflow: hidden;
+}
+
+/* ---------- crash ---------- */
+
+/* Scanlines plus two colour bars tearing across the screen while the rows glitch out. */
+.noise {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 3px);
+  animation: noise-fade 1.1s steps(6, end) forwards;
+}
+
+.noise::before,
+.noise::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 11%;
+  mix-blend-mode: screen;
+  animation: tear 0.32s steps(1, end) infinite;
+}
+
+.noise::before {
+  background: rgba(255, 45, 85, 0.22);
+}
+
+.noise::after {
+  background: rgba(0, 229, 255, 0.18);
+  animation-duration: 0.26s;
+  animation-direction: reverse;
+}
+
+@keyframes tear {
+  0% {
+    top: 8%;
+  }
+  20% {
+    top: 61%;
+    height: 3%;
+  }
+  40% {
+    top: 33%;
+  }
+  60% {
+    top: 84%;
+    height: 7%;
+  }
+  80% {
+    top: 19%;
+    height: 2%;
+  }
+}
+
+@keyframes noise-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The picture collapses into a bright line, then a dot — an old CRT switching off. */
+.crt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: #fff;
+  box-shadow:
+    0 0 18px 4px color-mix(in srgb, var(--color-accent-300) 70%, transparent),
+    0 0 60px 12px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  opacity: 0;
+  animation: crt-off 0.45s 0.95s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes crt-off {
+  0% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  75% {
+    opacity: 1;
+    transform: scaleX(0.004) scaleY(2);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(0) scaleY(2);
+  }
+}
+
+/* ---------- terminal ---------- */
+
+.terminal {
+  position: relative;
+  width: min(780px, 100%);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-neutral-200);
+  background: color-mix(in srgb, #0c0d16 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.65),
+    0 0 80px color-mix(in srgb, var(--color-accent) 16%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dot {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.red {
+  background: #ff5f57;
+}
+
+.yellow {
+  background: #febc2e;
+}
+
+.green {
+  background: #28c840;
+}
+
+.title {
+  flex: 1;
+  margin-right: 49px; /* balance the three dots so the title sits in the true centre */
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-neutral-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fixed height: lines pile up from the top and the oldest scroll away (fading out), like a real terminal. */
+.body {
+  --pad: 14px;
+  height: min(58vh, 480px);
+  padding: var(--pad) 18px;
+  overflow: hidden;
+  /* Fades only within the top padding: the first line is untouched until lines start scrolling away. */
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--pad));
+}
+
+.line {
+  min-height: 1.6em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prompt {
+  color: var(--color-accent-400);
+}
+
+.dim {
+  color: var(--color-neutral-500);
+}
+
+.comment {
+  color: var(--color-neutral-500);
+  font-style: italic;
+}
+
+.danger {
+  color: #ff5a6a;
+  font-weight: 700;
+}
+
+.error {
+  color: #ff8a95;
+}
+
+.hint {
+  color: #f5d27a;
+}
+
+.ok {
+  color: #8be3b0;
+}
+
+/* Bad news arrives with a red flash. */
+.line.danger,
+.line.error {
+  animation: flash 0.6s ease-out;
+}
+
+@keyframes flash {
+  0% {
+    background: color-mix(in srgb, #ff2d55 30%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  margin-left: 1px;
+  vertical-align: -0.2em;
+  background: var(--color-accent-300);
+  animation: blink 1s steps(1, end) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 11px;
+}
+
+.skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-neutral-500);
+  background: transparent;
+  cursor: pointer;
+}
+
+.skip:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.skip kbd {
+  padding: 0 5px;
+  border: 1px solid var(--color-neutral-700);
+  border-radius: 4px;
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  .terminal {
+    font-size: 11px;
+  }
+
+  .body {
+    --pad: 10px;
+    padding-inline: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor,
+  .line.danger,
+  .line.error {
+    animation: none;
+  }
+}

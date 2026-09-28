@@ -1,4 +1,5 @@
 import { Cursor } from '@/components/fun/Cursor';
+import { QueryIncident } from '@/components/incident/QueryIncident';
 import { Navbar } from '@/components/layout/Navbar';
 import { LocaleTransition } from '@/components/motion/LocaleTransition';
 import { Bio } from '@/components/sections/Bio';
@@ -17,7 +18,9 @@ import { VolleyFab } from '@/components/volleyball/VolleyFab';
  * Page composition:
  * Hero → marquee band (the hand-off into the page) → Bio → Projects →
  * Hobbies (AI, 3D car, volleyball, games) → Contact + footer.
- * Overlays: the volleyball button and the terminal (hero button or ' / ~ keys).
+ * Overlays: the volleyball button, the terminal (hero button or ' / ~ keys) and
+ * QueryIncident, which hides and restores the page's blocks when the hero's
+ * DELETE sticker is clicked.
  *
  * The page itself is a Server Component; each section is a small Client
  * Component that reads copy from the i18n context.
@@ -39,6 +42,7 @@ export default function Page() {
       </LocaleTransition>
       <VolleyFab />
       <Terminal />
+      <QueryIncident />
       <Cursor />
     </>
   );

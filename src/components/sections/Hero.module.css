@@ -32,6 +32,15 @@
   max-width: var(--page-max);
   margin: 0 auto;
   padding: 120px var(--gutter) 80px;
+  /* The copy is stacked above the sticker layer and spans the whole hero: let the
+     pointer through to the stickers (hover wobble, the DELETE one's click), except
+     on the CTAs. The hero text isn't selectable anyway. */
+  pointer-events: none;
+}
+
+.inner a,
+.inner button {
+  pointer-events: auto;
 }
 
 .tags {
@@ -132,6 +141,15 @@
   color: #8be3b0;
   border-color: color-mix(in srgb, #3ddc84 50%, transparent);
   background: color-mix(in srgb, #10301f 75%, transparent);
+}
+
+/* A sticker that does something (the DELETE one runs its query): a button dressed as a sticker. */
+.clickable {
+  margin: 0;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
 }
 
 /* Long stickers need room: hidden until the viewport is wide enough. */
