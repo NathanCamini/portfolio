@@ -1,34 +1,30 @@
 import type { Dictionary } from '../types';
 
-/**
- * Português. Os trechos entre [colchetes] são placeholders: troque pelos seus
- * dados reais (curso, universidade, anos…). Os projetos são exemplos de
- * trabalho back-end — substitua pelos seus.
- */
+/** Português. Formação e experiência vêm do LinkedIn. */
 export const pt: Dictionary = {
   meta: {
     title: 'Nathan Camini — Desenvolvedor back-end',
     description:
-      'Portfólio de Nathan Camini: desenvolvedor back-end, graduado e pós-graduando. APIs, sistemas distribuídos, experimentos com IA, um 911 GT3 RS em 3D e dois mini-jogos.',
+      'Portfólio de Nathan Camini: desenvolvedor de software na Tramontina, formado em Análise e Desenvolvimento de Sistemas (IFRS) e pós-graduando em Engenharia de IA e MLOps (PUC Minas). APIs, sistemas legados, um 911 GT3 RS em 3D e dois mini-jogos.',
   },
   nav: { bio: 'Biografia', projects: 'Projetos', hobbies: 'Hobbies', contact: 'Contato', language: 'Idioma' },
   hero: {
     tag1: 'Back-end · APIs & sistemas',
-    tag2: 'Pós-graduando',
+    tag2: 'Pós em IA & MLOps',
     titleLead: 'Construo sistemas que',
     titleWords: ['aguentam o tranco.', 'escalam sem drama.', 'não caem às 3h da manhã.', 'fazem o front sorrir.'],
-    sub: 'Desenvolvedor back-end graduado em [Curso] e pós-graduando em [Área]. No dia a dia: APIs, filas e bancos de dados. Aqui, o playground: role a página, arraste o carro, jogue uma partida.',
+    sub: 'Desenvolvedor de software na Tramontina, formado em Análise e Desenvolvimento de Sistemas e pós-graduando em Engenharia de IA e MLOps. No dia a dia: APIs, sistemas legados e integrações. Aqui, o playground: role a página, arraste o carro, jogue uma partida.',
     cta1: 'Ver projetos',
     cta2: 'Jogar vôlei',
     scrollHint: 'Role para explorar',
   },
   marquee: [
     'APIs REST',
-    'Mensageria',
+    '.NET / C#',
+    'Genero',
+    'Next.js',
     'Bancos de dados',
-    'Observabilidade',
-    'Cloud',
-    'Testes',
+    'MLOps',
     'Porsche 911',
     'Vôlei de praia',
     'Rainbow Six Siege',
@@ -37,26 +33,65 @@ export const pt: Dictionary = {
   bio: {
     label: '01 — Biografia',
     title: 'Da curiosidade por como as coisas funcionam ao código que as faz funcionar.',
-    p1: '[Conte aqui como começou: o primeiro contato com programação, o que o levou ao back-end e o tipo de problema que gosta de resolver — performance, integrações, dados.]',
-    p2: '[Descreva a graduação concluída, o foco da pós-graduação atual e como a pesquisa acadêmica aparece no seu trabalho do dia a dia.]',
+    p1: 'Comecei na informática do 6º Batalhão de Comunicações do Exército, cuidando de rede, telefonia e computadores. De lá fui para Análise e Desenvolvimento de Sistemas no IFRS, estagiei desenvolvendo um ERP ainda em validação — lado a lado com o cliente — e passei quase dois anos em vendas industriais, onde aprendi a negociar e a entender o que o cliente realmente precisa.',
+    p2: 'Hoje sou desenvolvedor de software na Tramontina: mantenho sistemas legados em Genero, adaptei o sistema para a reforma tributária e crio aplicações novas com .NET/C# e Next.js. Em paralelo, faço pós em Engenharia de IA e MLOps na PUC Minas, estudando como levar modelos do notebook para produção.',
     eduLabel: 'Formação acadêmica',
     edu: [
       {
-        level: 'Graduação',
-        course: '[Nome do curso]',
-        school: '[Universidade]',
-        years: '20XX – 20XX',
+        level: 'Pós-graduação',
+        course: 'Engenharia de IA e MLOps',
+        school: 'PUC Minas',
+        years: 'abr 2026 – hoje',
+        status: 'Em andamento',
+        done: false,
+        pct: 30,
+      },
+      {
+        level: 'Graduação · CST',
+        course: 'Análise e Desenvolvimento de Sistemas',
+        school: 'IFRS',
+        years: 'jan 2021 – dez 2023',
         status: 'Concluída',
         done: true,
       },
+    ],
+    expLabel: 'Experiência',
+    exp: [
       {
-        level: 'Pós-graduação',
-        course: '[Especialização / Mestrado em …]',
-        school: '[Instituição]',
-        years: '20XX – hoje',
-        status: 'Em andamento',
-        done: false,
-        pct: 55,
+        role: 'Desenvolvedor de software',
+        company: 'Tramontina',
+        period: 'jan 2024 – hoje',
+        place: 'Carlos Barbosa, RS · presencial',
+        current: true,
+        body: 'Criação e manutenção de aplicações em Genero para os sistemas legados e desenvolvimento de novas aplicações com .NET/C# e Next.js.',
+        highlights: [
+          'Adequação do sistema para a reforma tributária (Genero).',
+          'Plataforma de venda de itens exclusivos feitos sob encomenda (Next.js + Genero).',
+          'API REST que fornece dados para alimentar uma plataforma externa (.NET/C#).',
+        ],
+        stack: ['Genero', '.NET / C#', 'Next.js'],
+      },
+      {
+        role: 'Vendedor',
+        company: 'Zegla Indústria de Máquinas para Bebidas',
+        period: 'abr 2022 – jan 2024',
+        place: 'Bento Gonçalves, RS · presencial',
+        body: 'Venda de peças para máquinas Zegla: criação de propostas, negociação com o cliente, fechamento de pedidos e controle de metas.',
+      },
+      {
+        role: 'Estagiário de desenvolvimento',
+        company: 'Includer',
+        period: 'out 2021 – abr 2022',
+        place: 'Meio período',
+        body: 'Front-end com React e contato com Laravel e PostgreSQL em um ERP ainda em validação — trabalhando direto com o cliente para entender as necessidades e desenvolver a solução.',
+        stack: ['React', 'Laravel', 'PostgreSQL'],
+      },
+      {
+        role: 'Soldado de comunicações',
+        company: 'Exército Brasileiro',
+        period: 'fev 2020 – jun 2021',
+        place: 'Bento Gonçalves, RS',
+        body: 'Informática do 6º Batalhão de Comunicações: suporte à rede de internet e telefonia, manutenção de computadores e instalação de novos pontos de rede e telefone.',
       },
     ],
   },
@@ -69,28 +104,25 @@ export const pt: Dictionary = {
     stageLabel: 'Estágio',
     past: [
       {
-        year: '2025',
+        kicker: 'Tramontina',
+        type: 'Legado',
+        title: 'Reforma tributária',
+        body: 'Adequação do sistema legado às novas regras da reforma tributária brasileira.',
+        stack: ['Genero'],
+      },
+      {
+        kicker: 'Tramontina',
+        type: 'Plataforma',
+        title: 'Itens exclusivos sob encomenda',
+        body: 'Plataforma para venda de produtos exclusivos feitos sob encomenda, com front-end em Next.js integrado ao sistema em Genero.',
+        stack: ['Next.js', 'Genero'],
+      },
+      {
+        kicker: 'Tramontina',
         type: 'API',
-        title: 'Plataforma de pagamentos',
-        body: 'API idempotente com filas, retries e conciliação automática, processando milhares de transações por minuto.',
-        stack: ['Node.js', 'PostgreSQL', 'RabbitMQ'],
-        href: '#',
-      },
-      {
-        year: '2024',
-        type: 'Infra',
-        title: 'Observabilidade de microsserviços',
-        body: 'Métricas, traces e alertas padronizados para 20+ serviços — o tempo para achar um incidente caiu pela metade.',
-        stack: ['Docker', 'Kubernetes', 'Grafana'],
-        href: '#',
-      },
-      {
-        year: '2023',
-        type: 'Integração',
-        title: 'Hub de integrações',
-        body: 'Serviço que conecta ERPs e parceiros por webhooks, com fila de reprocessamento e painel de auditoria.',
-        stack: ['Python', 'FastAPI', 'Redis'],
-        href: '#',
+        title: 'API de dados para parceiro',
+        body: 'API REST que fornece os dados que alimentam uma plataforma externa.',
+        stack: ['.NET', 'C#', 'REST'],
       },
     ],
     future: [
