@@ -5,8 +5,7 @@ export const site = {
   name: 'Nathan Camini',
   /** Public URL, used for canonical/OG tags. Set NEXT_PUBLIC_SITE_URL in production. */
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
-  // TODO: replace the placeholders below with your real contact links.
-  email: 'voce@email.com',
+  email: 'camininathan@gmail.com',
   links: {
     github: 'https://github.com/NathanCamini',
     linkedin: 'https://www.linkedin.com/in/nathancamini/',

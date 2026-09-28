@@ -1,13 +1,21 @@
 'use client';
 
+import { useRef } from 'react';
+import { motion, useScroll, useSpring } from 'motion/react';
 import { Reveal } from '@/components/motion/Reveal';
 import { useI18n } from '@/i18n/I18nProvider';
 import styles from './Bio.module.css';
 
-/** 01 — Bio: narrative on the left, education timeline cards on the right. */
+/**
+ * 01 — Bio: narrative on the left, education cards on the right, then a
+ * work-experience timeline whose rail fills in as it scrolls past.
+ */
 export function Bio() {
   const { t } = useI18n();
   const { bio } = t;
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: timelineRef, offset: ['start 80%', 'end 60%'] });
+  const railFill = useSpring(scrollYProgress, { stiffness: 120, damping: 30 });
 
   return (
     <section id="bio" className="section">
@@ -56,6 +64,48 @@ export function Bio() {
               </div>
             </Reveal>
           ))}
+        </div>
+      </div>
+
+      <div className={styles.exp}>
+        <Reveal className="eyebrow-muted">{bio.expLabel}</Reveal>
+        <div ref={timelineRef} className={styles.timeline}>
+          <span className={styles.rail} aria-hidden="true">
+            <motion.span className={styles.railFill} style={{ scaleY: railFill }} />
+          </span>
+          <ol className={styles.jobs}>
+            {bio.exp.map((job, i) => (
+              <Reveal as="li" key={`${job.company}-${job.period}`} delay={i * 80} className={styles.job}>
+                <span className={job.current ? `${styles.dot} ${styles.dotCurrent}` : styles.dot} aria-hidden="true" />
+                <div className={`card ${styles.card} ${styles.jobCard}`}>
+                  <div className={styles.cardHead}>
+                    <span className="card-kicker">{job.period}</span>
+                    <span className={styles.meta}>{job.place}</span>
+                  </div>
+                  <h3 className="card-title">
+                    {job.role} <span className={styles.company}>@ {job.company}</span>
+                  </h3>
+                  <p className={styles.jobBody}>{job.body}</p>
+                  {job.highlights && (
+                    <ul className={styles.highlights}>
+                      {job.highlights.map((h) => (
+                        <li key={h}>{h}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {job.stack && (
+                    <ul className={styles.stack} aria-label="Stack">
+                      {job.stack.map((s) => (
+                        <li key={s} className="tag tag-neutral">
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Reveal>
+            ))}
+          </ol>
         </div>
       </div>
     </section>

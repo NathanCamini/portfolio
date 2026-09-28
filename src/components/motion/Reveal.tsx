@@ -42,6 +42,7 @@ const TAGS = {
   h2: motion.h2,
   h3: motion.h3,
   article: motion.article,
+  li: motion.li,
 } as const;
 
 type RevealProps = Omit<HTMLMotionProps<'div'>, 'custom' | 'variants' | 'initial' | 'whileInView'> & {
