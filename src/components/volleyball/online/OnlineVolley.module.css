@@ -495,6 +495,155 @@
   color: var(--color-neutral-300);
   background: color-mix(in srgb, var(--color-bg) 60%, transparent);
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---- connection: three bars per player ---- */
+.signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.signalName {
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+
+.bars i {
+  width: 3px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--color-text) 22%, transparent);
+}
+
+.bars i:nth-child(1) {
+  height: 4px;
+}
+.bars i:nth-child(2) {
+  height: 7px;
+}
+.bars i:nth-child(3) {
+  height: 10px;
+}
+
+.q3 .bars i {
+  background: #4ade80;
+}
+.q2 .bars i:nth-child(-n + 2) {
+  background: #facc15;
+}
+.q1 .bars i:nth-child(1) {
+  background: #f87171;
+}
+
+/* ---- reactions ---- */
+.emoteBar {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3; /* over the result card too: a "gg" after the final whistle */
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+}
+
+.emoteBtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    transform 0.12s,
+    background 0.12s;
+}
+
+.emoteBtn:hover {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  transform: scale(1.12);
+}
+
+.emoteBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.bubble {
+  position: absolute;
+  top: 24%;
+  z-index: 3;
+  font-size: clamp(32px, 6vw, 52px);
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+  animation: bubble 2.2s ease-out both;
+}
+
+.bubbleLeft {
+  left: 22%;
+}
+
+.bubbleRight {
+  right: 22%;
+}
+
+@keyframes bubble {
+  0% {
+    transform: translateY(12px) scale(0.4);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(0) scale(1.15);
+    opacity: 1;
+  }
+  22% {
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-18px);
+    opacity: 0;
+  }
+}
+
+/* Touch screens: a row under the court (over it, the bar would cover the score). */
+.emoteRow {
+  position: static;
+  align-self: center;
+  justify-content: center;
+  margin: 10px auto 0;
+  width: max-content;
+}
+
+@media (max-width: 640px) {
+  .hud {
+    right: 6px;
+    bottom: 6px;
+    gap: 8px;
+    font-size: 10px;
+  }
+  .signalName {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -513,7 +662,20 @@
   .countNum {
     animation: none;
   }
+  .bubble {
+    animation: bubble-fade 2.2s both;
+  }
   .spinner {
     animation-duration: 2.4s;
+  }
+}
+
+@keyframes bubble-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }

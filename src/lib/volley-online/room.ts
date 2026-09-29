@@ -40,7 +40,7 @@ export interface Conn {
   send(data: string | ArrayBuffer): void;
   close(code: number, reason: string): void;
   /** Remember which seat this socket holds, so the room can be rebuilt after the object hibernates. */
-  bind(side: Side | null): void;
+  bind(side: Side | 'watch' | null): void;
   /** The client's IP when known: two seats from one address don't play for rating. */
   readonly ip?: string;
 }
@@ -121,6 +121,10 @@ export class RoomCore {
   private deadline: number | null = null;
   /** Sockets that haven't said hello yet. */
   private readonly pending = new Map<string, Conn>();
+  /** Spectators: read-only sockets that get everything the players get. */
+  private readonly watchers = new Map<string, Conn>();
+  /** When each side last reacted (EMOTE_COOLDOWN_MS). */
+  private readonly lastEmote: [number, number] = [-Infinity, -Infinity];
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
   private lastLoopAt = 0;
   private acc = 0;
@@ -180,6 +184,7 @@ export class RoomCore {
   closed(conn: Conn) {
     this.buckets.delete(conn.id);
     if (this.pending.delete(conn.id)) this.host.setTimer(`hello:${conn.id}`, null);
+    if (this.watchers.delete(conn.id)) return this.broadcastRoom();
     const side = this.sideOf(conn);
     if (side === null) return;
     this.seats[side]!.conn = null;
@@ -227,7 +232,7 @@ export class RoomCore {
 
   /** Nobody is connected (the host may delete the room after its TTL). */
   get empty() {
-    return this.pending.size === 0 && this.seats.every((s) => !s?.conn);
+    return this.pending.size === 0 && this.watchers.size === 0 && this.seats.every((s) => !s?.conn);
   }
 
   view(): RoomView {
@@ -240,6 +245,7 @@ export class RoomCore {
       ) as RoomView['seats'],
       remainingMs: this.deadline === null ? null : Math.max(0, this.deadline - now),
       rated: this.rated,
+      spectators: this.watchers.size,
       live: this.match !== null,
       wins: [this.wins[0], this.wins[1]],
       result: this.result,
@@ -250,12 +256,50 @@ export class RoomCore {
 
   private dispatch(conn: Conn, m: ClientMessage) {
     if (m.t === 'ping') return this.ping(conn, m.c, m.rtt);
-    if (m.t === 'hello') return this.hello(conn, m.v, m.name, m.token, m.pid);
+    if (m.t === 'hello') {
+      if (m.watch) return this.watch(conn, m.v);
+      return this.hello(conn, m.v, m.name, m.token, m.pid);
+    }
+    if (this.watchers.has(conn.id)) {
+      // A spectator only pings and leaves.
+      if (m.t !== 'leave') return this.fail(conn, 'bad_message');
+      conn.bind(null);
+      conn.close(1000, 'left');
+      return this.closed(conn);
+    }
     const side = this.sideOf(conn);
     if (side === null) return this.fail(conn, 'bad_message'); // must say hello first
     if (m.t === 'ready') this.ready(side, m.ready);
     else if (m.t === 'input') this.input(side, m.tick, m.bits);
+    else if (m.t === 'emote') this.emote(side, m.id);
     else this.leave(side, conn);
+  }
+
+  /** A spectator: gets the room, the snapshots and the reactions; can't play or talk. */
+  private watch(conn: Conn, version: number) {
+    if (this.sideOf(conn) !== null || this.watchers.has(conn.id)) return;
+    if (version !== PROTOCOL_VERSION) return this.fail(conn, 'bad_version');
+    if (this.watchers.size >= NET.MAX_SPECTATORS) return this.fail(conn, 'room_full');
+    this.pending.delete(conn.id);
+    this.host.setTimer(`hello:${conn.id}`, null);
+    this.watchers.set(conn.id, conn);
+    conn.bind('watch');
+    this.to(conn, { t: 'watching', room: this.view() });
+    if (this.match) this.to(conn, { t: 'state', s: this.match.snapshot() });
+    this.broadcastRoom(); // the players see one more watching
+  }
+
+  /** After hibernation: a spectator's socket. */
+  restoreWatcher(conn: Conn) {
+    this.watchers.set(conn.id, conn);
+  }
+
+  /** A quick reaction, to everyone in the room; too frequent ones are simply dropped. */
+  private emote(side: Side, id: number) {
+    const now = this.host.now();
+    if (now - this.lastEmote[side] < NET.EMOTE_COOLDOWN_MS) return;
+    this.lastEmote[side] = now;
+    this.broadcast({ t: 'emote', side, id });
   }
 
   private hello(conn: Conn, version: number, rawName: string, token?: string, pid?: string) {
@@ -518,5 +562,6 @@ export class RoomCore {
   private broadcast(msg: ServerMessage) {
     const data = encodeServerMessage(msg);
     for (const s of this.seats) s?.conn?.send(data);
+    for (const w of this.watchers.values()) w.send(data);
   }
 }

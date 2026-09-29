@@ -8,6 +8,7 @@ foi feito, por quê, e como testar, rodar e publicar.
 - **Fase 2:** [partida rápida](#partida-rápida), uma fila que junta dois desconhecidos numa sala nova.
 - **Fase 3:** [ranking online](#ranking-online) com Elo: a partida rápida vale pontos e a fila junta gente de nível
   parecido.
+- **Fase 4:** [reações, espectadores e indicador de conexão](#reações-espectadores-e-conexão).
 
 - [Como se joga](#como-se-joga)
 - [Arquitetura](#arquitetura)
@@ -17,6 +18,7 @@ foi feito, por quê, e como testar, rodar e publicar.
 - [Ciclo de vida da sala](#ciclo-de-vida-da-sala)
 - [Partida rápida](#partida-rápida)
 - [Ranking online](#ranking-online)
+- [Reações, espectadores e conexão](#reações-espectadores-e-conexão)
 - [Servidor autoritativo](#servidor-autoritativo)
 - [Netcode no navegador](#netcode-no-navegador)
 - [Reconexão](#reconexão)
@@ -141,6 +143,8 @@ cliente antigo recebe `bad_version`, e a página pede para recarregar.
 | `input { tick, bits }`            | Mudança de teclas, valendo a partir de `tick`. `bits`: 1 ← · 2 → · 4 pulo                                      |
 | `ping { c, rtt? }`                | A cada 2 s. `c` volta no `pong`, e `rtt` é o ping medido, mostrado a todos.                                    |
 | `leave`                           | Sair da sala. No meio da partida, conta como W.O.                                                              |
+| `emote { id }`                    | Uma reação (`EMOTES[id]`, 0–5). Só jogadores; mais de uma a cada 1,5 s é descartada.                           |
+| `hello { v, name, watch: true }`  | Entrar como **espectador** (sem cadeira; o nome é ignorado).                                                   |
 
 **Servidor → cliente**
 
@@ -151,6 +155,8 @@ cliente antigo recebe `bad_version`, e a página pede para recarregar.
 | `state { s }`                   | Snapshot autoritativo da partida: 60 por segundo, e na hora quando sai um ponto. Vai como **frame binário** (abaixo).                                     |
 | `opp { tick, bits }`            | O adversário mudou de teclas, valendo a partir de `tick`. Repassado no instante em que o servidor recebe o `input` dele.                                  |
 | `pong { c }`                    | Resposta ao ping.                                                                                                                                         |
+| `watching { room }`             | Entrou como espectador: a sala; depois vêm os snapshots e as reações, como para os jogadores.                                                             |
+| `emote { side, id }`            | Um jogador reagiu; vai para todos na sala, espectadores incluídos.                                                                                        |
 | `error { code }`                | `bad_message`, `bad_version`, `invalid_name`, `room_full`, `room_not_found`, `rate_limited`, `replaced`, `timeout`. O servidor fecha o socket em seguida. |
 
 **Snapshot:** `tick`, posição e velocidade dos três corpos (arredondadas a 1/1000 px), placar, fase do rali, tempo
@@ -239,6 +245,31 @@ id>` vem também a posição de quem pergunta — a página manda o hash, nunca 
 O que isso **não** impede: alguém com dois navegadores em duas redes diferentes jogando contra si mesmo. Para um
 portfólio, o custo (duas conexões, partidas reais de 7 pontos) já tira a graça; o próximo passo seria limitar
 quantas partidas por dia contam entre o mesmo par.
+
+## Reações, espectadores e conexão
+
+**Reações.** Seis emoji (👍 👏 😂 😮 🔥 😅, `EMOTES` em `protocol.ts`), pelas teclas **1–6** ou pela barra de botões
+(sobre a quadra no desktop, embaixo dela no celular), da contagem até o resultado. A sala manda `emote { side, id }`
+para todo mundo e o navegador mostra um balão sobre o jogador por 2,2 s. Quem reagiu vê o balão do seu lado (a
+esquerda); o espectador vê cada um sobre o seu lado da quadra. Só jogadores reagem, e no máximo uma vez a cada 1,5 s
+(o resto é descartado sem erro): não dá para inundar a tela do outro.
+
+**Espectadores.** Quem abre o link de uma sala **cheia** assiste em vez de ver "sala cheia":
+
+- entra com `hello { watch: true }` e recebe `watching { room }`, depois os mesmos snapshots e reações dos jogadores;
+- não joga nem reage: fora `ping` e `leave`, qualquer mensagem de espectador fecha o socket com `bad_message`;
+- não prevê nada: o `SnapshotBuffer` (`spectator.ts`) desenha **um snapshot atrás**, deslizando entre os dois
+  últimos (a 60 por segundo, ~17 ms de atraso), e mostra na hora os saltos grandes (o reinício do saque);
+- vê um cartão com "Nathan × Maria" entre os ralis, a pausa se alguém cair, e o resultado;
+- pode sair a qualquer momento, inclusive trocando de aba (para um jogador, isso seria W.O., então as abas travam
+  só para quem joga);
+- até **20** por sala (`MAX_SPECTATORS`); os jogadores veem quantos estão assistindo (👁 2);
+- sobrevive à hibernação: o _attachment_ do socket guarda `side: 'watch'`, e a sala o reconecta ao acordar. Uma sala
+  só com espectadores não é apagada pelo alarme.
+
+**Conexão.** Durante a partida, o canto da quadra mostra três barrinhas para cada jogador, calculadas a partir da ida
+e volta que cada um mede: verde abaixo de 80 ms, amarelo até 160 ms, vermelho acima. Você vê a sua e a do
+adversário, então dá para saber de quem é o lag.
 
 ## Servidor autoritativo
 
@@ -383,6 +414,8 @@ até você. O repasse (`opp`) e os 60 snapshots/s cortam 35–60% do erro da bol
 | Apelido               | Mesmas regras e filtro do ranking, conferidas no servidor                      |
 | Token de cadeira      | 128 bits aleatórios (CSPRNG), 32 hex conferidos pelo parser                    |
 | Placar                | Só o servidor decide: o navegador nunca envia posição, bola nem pontos         |
+| Reações               | Só jogadores, uma a cada 1,5 s (as extras são descartadas)                     |
+| Espectadores          | Até 20 por sala; só `ping` e `leave`                                           |
 
 ## Custo no plano gratuito
 
@@ -428,6 +461,10 @@ npx vitest run src/lib/volley-online worker    # só o online
   - pausa e volta com token (estado congelado idêntico);
   - W.O. por tempo e por saída, aba duplicada;
   - hibernação (sala remontada do armazenamento).
+- `room.test.ts` (fase 4): espectador numa sala cheia (sala, snapshots, contagem para os jogadores), espectador não
+  joga, limite de 20, reação para todos com o intervalo mínimo, espectador de volta depois da hibernação.
+- `spectator.test.ts`: um snapshot atrás deslizando pela metade do caminho, salto de saque mostrado na hora,
+  snapshot velho ignorado.
 - `queue.test.ts`, a fila:
   - pareamento por ordem de chegada, o terceiro espera o quarto;
   - quem desiste sai da fila;
@@ -447,7 +484,8 @@ npx vitest run src/lib/volley-online worker    # só o online
   WebSockets de verdade. Dois bots usam o mesmo `Predictor` e o mesmo `TickClock` do navegador, jogam até 7, um
   deles cai e volta no meio; outros dois se encontram pela partida rápida, jogam, um desiste e o ranking do D1
   registra a vitória e a derrota; um terceiro jogador é recusado e
-  uma sala inexistente não abre. Leva ~2 minutos
+  uma sala inexistente não abre; um espectador assiste uma partida real (~60 snapshots/s) e vê a reação de um
+  jogador. Leva ~2 minutos
   e só roda quando pedido:
 
   ```bash
@@ -472,6 +510,12 @@ E a partida rápida, também com duas pessoas (desktop em PT, celular em EN):
 - Enter no campo do apelido (sem código) inicia a busca;
 - os dois pareados, contagem e partida sem clicar em "pronto";
 - um adversário que é pareado mas nunca entra na sala: depois de 10 s a pessoa volta sozinha para a fila.
+
+E a fase 4, com três pessoas (duas jogando, uma assistindo pelo link da sala cheia):
+
+- o espectador vê "Assistindo · Nathan × Maria", depois a partida, e sai trocando de aba;
+- tecla 5 (🔥) de um jogador e o botão 😂 do outro no celular: cada balão aparece do lado certo para os três;
+- barrinhas de conexão dos dois jogadores e o 👁 com o número de espectadores, que some quando ele sai.
 
 Nenhum erro no console.
 
@@ -519,11 +563,14 @@ migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo i
   quem estiver lá, perto ou longe.
 - **Corrida rara no rating:** ler e gravar o rating são duas idas ao D1. Se o mesmo jogador terminar duas partidas
   rápidas no mesmo instante (duas abas, duas salas), uma atualização pode se perder.
-- **Sem espectadores:** ver as próximas fases.
+- **Espectador só pelo link.** Não há uma lista de partidas em andamento para escolher; para assistir, é preciso o link
+  (ou o código) de uma sala cheia.
 
 ## Próximas fases
 
 2. ~~**Partida rápida**~~: feita (ver [Partida rápida](#partida-rápida)).
 3. ~~**Ranking online (Elo)**~~: feito (ver [Ranking online](#ranking-online)).
-4. **Acabamento:** emotes rápidos, espectadores (um terceiro socket só de leitura) e indicador de conexão mais rico.
-   O ping de cada jogador já aparece no lobby e durante a partida.
+4. ~~**Acabamento**~~: feito (ver [Reações, espectadores e conexão](#reações-espectadores-e-conexão)).
+
+Ideias para depois: uma vitrine de partidas ao vivo para assistir, replays (a partida é determinística: guardar as
+teclas basta para reproduzi-la inteira) e salas com melhor de 3.

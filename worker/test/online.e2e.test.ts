@@ -227,6 +227,38 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     [a, b].forEach((p) => (p.stop(), p.ws.close()));
   });
 
+  it('lets a spectator watch a running match and see the reactions', { timeout: 60_000 }, async () => {
+    const code = await createRoom();
+    const a = new BotPlayer('Ana Palco', 7);
+    const b = new BotPlayer('Beto Palco', 8);
+    await a.connect(code);
+    await b.connect(code);
+    a.send({ t: 'ready', ready: true });
+    b.send({ t: 'ready', ready: true });
+    await a.until((m) => m.t === 'room' && m.room.phase === 'playing');
+
+    const seen: ServerMessage[] = [];
+    const watcher = new WebSocket(`${BASE!.replace(/^http/, 'ws')}/api/volley/rooms/${code}`, {
+      headers: { Origin: BASE! },
+    } as unknown as string[]);
+    watcher.binaryType = 'arraybuffer';
+    watcher.addEventListener('open', () =>
+      watcher.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: '', watch: true })),
+    );
+    watcher.addEventListener('message', (e: MessageEvent) => seen.push(parseServerMessage(e.data)!));
+    await a.until((m) => m.t === 'room' && m.room.spectators === 1); // the players see the audience
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(seen[0]).toMatchObject({ t: 'watching', room: { code } });
+    expect(seen.filter((m) => m.t === 'state').length).toBeGreaterThan(40); // ~60/s, like the players
+
+    a.send({ t: 'emote', id: 4 });
+    await b.until((m) => m.t === 'emote');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(seen.find((m) => m.t === 'emote')).toEqual({ t: 'emote', side: a.side, id: 4 });
+    watcher.close();
+    [a, b].forEach((p) => (p.stop(), p.ws.close()));
+  });
+
   it('refuses a third player and an unknown room', { timeout: 30_000 }, async () => {
     const code = await createRoom();
     const players = [new BotPlayer('Uno', 1), new BotPlayer('Dos', 2), new BotPlayer('Tres', 3)];

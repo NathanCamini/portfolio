@@ -113,6 +113,13 @@ export interface OnlineStrings {
   record: string;
   rated: string;
   friendly: string;
+  /** Spectators (a full room): the header, the lobby line, the audience count `{n}`, the pause hint `{n}` s. */
+  watching: string;
+  watchingHint: string;
+  spectators: string;
+  pausedWatch: string;
+  /** The reactions bar (keys 1–6). */
+  reactions: string;
   /** A rated room whose result didn't count (same browser or same network on both sides). */
   notCounted: string;
   /** `{after}` = new rating, `{delta}` = signed change ("+16"). */
