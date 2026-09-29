@@ -103,6 +103,15 @@ export const en: Dictionary = {
     stageLabel: 'Stage',
     past: [
       {
+        kicker: 'Personal project · 2026',
+        type: 'Website',
+        title: 'Empresa CNC',
+        body: 'Company website for a (fictional) CNC cutting and machining shop: home page, work by category, about and contact straight to WhatsApp. Fully prerendered and deployed to Cloudflare on every push.',
+        stack: ['TanStack Start', 'React', 'TypeScript', 'Tailwind', 'Cloudflare'],
+        href: 'https://empresa-cnc.camininathan.workers.dev/',
+        linkLabel: 'See it live',
+      },
+      {
         kicker: 'Tramontina',
         type: 'Legacy',
         title: 'Tax reform',

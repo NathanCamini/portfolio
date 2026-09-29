@@ -91,8 +91,12 @@ export function Projects() {
                       ))}
                     </ul>
                     {item.href && (
-                      <a className={`btn btn-ghost ${styles.caseLink}`} href={item.href}>
-                        {p.caseLabel}
+                      <a
+                        className={`btn btn-ghost ${styles.caseLink}`}
+                        href={item.href}
+                        {...(/^https?:/.test(item.href) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      >
+                        {item.linkLabel ?? p.caseLabel}
                         <ArrowUpRight size={14} />
                       </a>
                     )}

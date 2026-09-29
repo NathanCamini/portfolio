@@ -26,6 +26,8 @@ export interface PastProject {
   stack: string[];
   /** Case-study link. Leave undefined to hide the link. */
   href?: string;
+  /** Label for the link when it isn't a case study (e.g. the live site). External links open in a new tab. */
+  linkLabel?: string;
 }
 
 export interface ExperienceItem {

@@ -103,6 +103,15 @@ export const pt: Dictionary = {
     stageLabel: 'Estágio',
     past: [
       {
+        kicker: 'Projeto pessoal · 2026',
+        type: 'Site',
+        title: 'Empresa CNC',
+        body: 'Site institucional de uma empresa de corte e usinagem CNC (fictícia): página inicial, trabalhos por categoria, sobre e contato direto pelo WhatsApp. Todo pré-renderizado e publicado automaticamente na Cloudflare a cada push.',
+        stack: ['TanStack Start', 'React', 'TypeScript', 'Tailwind', 'Cloudflare'],
+        href: 'https://empresa-cnc.camininathan.workers.dev/',
+        linkLabel: 'Ver site no ar',
+      },
+      {
         kicker: 'Tramontina',
         type: 'Legado',
         title: 'Reforma tributária',
