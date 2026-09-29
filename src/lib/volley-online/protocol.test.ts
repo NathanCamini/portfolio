@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { createGame, kickoff } from '../../components/volleyball/engine/physics';
 import {
   applySnapshot,
+  decodeSnapshot,
+  encodeServerMessage,
+  encodeSnapshot,
+  parseServerMessage,
+  SNAPSHOT_BYTES,
   isRoomCode,
   KEY,
   mirrorBits,
@@ -61,6 +66,25 @@ describe('snapshots', () => {
     expect(copy.score).toEqual([3, 5]);
     expect(copy.phase).toBe('serve');
     expect(copy.server).toBe(1);
+  });
+
+  it('travels as a 68-byte binary frame that decodes to exactly the same numbers', () => {
+    const g = createGame('online');
+    kickoff(g, 0);
+    Object.assign(g.ball, { x: 123.456789, y: -0.0001, vx: -3.33333, vy: 1e-7 });
+    Object.assign(g.player, { vx: -7.0005 });
+    g.phaseTime = 1234.56789;
+    g.matchTime = 600_000.1234;
+    g.lastScorer = null;
+    const s = takeSnapshot(g, 70_000, [KEY.LEFT | KEY.JUMP, KEY.RIGHT]);
+    const frame = encodeSnapshot(s);
+    expect(frame.byteLength).toBe(SNAPSHOT_BYTES);
+    expect(decodeSnapshot(frame)).toEqual(s);
+    // Bit for bit, including the sign of zero (the rounding never makes −0).
+    decodeSnapshot(frame)!.bodies.forEach((n, i) => expect(Object.is(n, s.bodies[i])).toBe(true));
+    expect(parseServerMessage(frame)).toEqual({ t: 'state', s });
+    expect(encodeServerMessage({ t: 'pong', c: 1 })).toBe('{"t":"pong","c":1}');
+    expect(decodeSnapshot(new ArrayBuffer(10))).toBeNull();
   });
 });
 

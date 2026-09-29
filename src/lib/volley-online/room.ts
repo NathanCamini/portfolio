@@ -5,6 +5,7 @@ import { ELO, type RatingChange } from './elo';
 import { OnlineMatch } from './match';
 import {
   NET,
+  encodeServerMessage,
   parseClientMessage,
   PROTOCOL_VERSION,
   type ClientMessage,
@@ -35,7 +36,8 @@ const STEP_MS = TIMING.STEP * 1000;
 /** A connected socket, as the room sees it. */
 export interface Conn {
   readonly id: string;
-  send(msg: ServerMessage): void;
+  /** An already encoded message (encodeServerMessage): a broadcast is serialized once, not once per socket. */
+  send(data: string | ArrayBuffer): void;
   close(code: number, reason: string): void;
   /** Remember which seat this socket holds, so the room can be rebuilt after the object hibernates. */
   bind(side: Side | null): void;
@@ -61,7 +63,11 @@ export interface RoomHost {
   random(): number;
   /** Single-shot named timers: setting one again replaces it, `null` cancels it. The host calls `room.timer(name)`. */
   setTimer(name: TimerName, ms: number | null): void;
-  /** While running, the host calls `room.loop()` about 60 times a second. */
+  /**
+   * While running, the host calls `room.loop()` again after the number of ms
+   * it returns: the moment the next snapshot tick is due, so a snapshot
+   * leaves as soon as its tick is simulated.
+   */
   setLoop(running: boolean): void;
   /** The lobby's durable part changed (seats, wins); the match itself isn't persisted. */
   persist(state: PersistedRoom): void;
@@ -191,22 +197,32 @@ export class RoomCore {
     }
   }
 
-  /** The fixed-step match loop: catches up with real time, 120 steps per second. */
-  loop() {
+  /**
+   * The fixed-step match loop: catches up with real time, 120 steps per
+   * second, and returns how many ms until the next snapshot tick is due (the
+   * host sleeps exactly that long). A point or the final whistle goes out the
+   * moment it happens, not on the next snapshot tick.
+   */
+  loop(): number {
     const match = this.match;
-    if (this.phase !== 'playing' || !match) return;
+    if (this.phase !== 'playing' || !match) return STEP_MS * NET.SNAPSHOT_EVERY;
     const now = this.host.now();
     this.acc += Math.min(now - this.lastLoopAt, 250);
     this.lastLoopAt = now;
     while (this.acc >= STEP_MS && !match.over) {
+      const phase = match.g.phase;
       match.step();
       this.acc -= STEP_MS;
       if (match.tick % NET.SNAPSHOT_EVERY === 0) this.broadcast({ t: 'state', s: match.snapshot() });
+      // Off the rhythm: sync() so the server keeps the same rounded state it sends (quantization).
+      else if (match.g.phase !== phase) this.broadcast({ t: 'state', s: match.sync() });
     }
     if (match.over) {
-      this.broadcast({ t: 'state', s: match.snapshot() });
       this.finish(match.winner, false);
+      return STEP_MS * NET.SNAPSHOT_EVERY;
     }
+    const ticksToSnapshot = NET.SNAPSHOT_EVERY - (match.tick % NET.SNAPSHOT_EVERY);
+    return Math.max(1, ticksToSnapshot * STEP_MS - this.acc);
   }
 
   /** Nobody is connected (the host may delete the room after its TTL). */
@@ -238,7 +254,7 @@ export class RoomCore {
     const side = this.sideOf(conn);
     if (side === null) return this.fail(conn, 'bad_message'); // must say hello first
     if (m.t === 'ready') this.ready(side, m.ready);
-    else if (m.t === 'input') this.match?.input(side, m.tick, m.bits);
+    else if (m.t === 'input') this.input(side, m.tick, m.bits);
     else this.leave(side, conn);
   }
 
@@ -255,7 +271,7 @@ export class RoomCore {
       const seat = this.seats[side]!;
       if (seat.conn && seat.conn !== conn) {
         // Same player, new tab (or a zombie socket): the newest wins.
-        seat.conn.send({ t: 'error', code: 'replaced' });
+        this.to(seat.conn, { t: 'error', code: 'replaced' });
         seat.conn.bind(null);
         seat.conn.close(4000, 'replaced');
       }
@@ -281,12 +297,20 @@ export class RoomCore {
     this.host.setTimer(`hello:${conn.id}`, null);
     this.host.setTimer(`grace:${side}`, null);
     conn.bind(side);
-    conn.send({ t: 'welcome', side, token: this.seats[side]!.token, room: this.view() });
-    if (this.match) conn.send({ t: 'state', s: this.match.snapshot() });
+    this.to(conn, { t: 'welcome', side, token: this.seats[side]!.token, room: this.view() });
+    if (this.match) this.to(conn, { t: 'state', s: this.match.snapshot() });
 
     // Both back while paused: resume after a countdown.
     if (this.phase === 'paused' && this.seats.every((s) => s?.conn)) this.countdown();
     this.changed();
+  }
+
+  /** Schedules the key change and relays it to the opponent right away (they rewind and replay with it). */
+  private input(side: Side, tick: number, bits: number) {
+    const applied = this.match?.input(side, tick, bits);
+    if (!applied || applied.result === 'ahead') return;
+    const rival = this.seats[other(side)]?.conn;
+    if (rival) this.to(rival, { t: 'opp', tick: applied.tick, bits });
   }
 
   private ready(side: Side, ready: boolean) {
@@ -305,7 +329,7 @@ export class RoomCore {
   }
 
   private ping(conn: Conn, c: number, rtt?: number) {
-    conn.send({ t: 'pong', c });
+    this.to(conn, { t: 'pong', c });
     const side = this.sideOf(conn);
     if (side === null || rtt === undefined) return;
     const seat = this.seats[side]!;
@@ -463,7 +487,7 @@ export class RoomCore {
   }
 
   private fail(conn: Conn, code: ErrorCode) {
-    conn.send({ t: 'error', code });
+    this.to(conn, { t: 'error', code });
     conn.close(4000, code);
     this.closed(conn);
   }
@@ -487,7 +511,12 @@ export class RoomCore {
     this.broadcast({ t: 'room', room: this.view() });
   }
 
+  private to(conn: Conn, msg: ServerMessage) {
+    conn.send(encodeServerMessage(msg));
+  }
+
   private broadcast(msg: ServerMessage) {
-    for (const s of this.seats) s?.conn?.send(msg);
+    const data = encodeServerMessage(msg);
+    for (const s of this.seats) s?.conn?.send(data);
   }
 }

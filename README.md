@@ -90,7 +90,7 @@ em dobro.
 **Partida rápida** (uma fila que junta dois desconhecidos) ou salas por link: uma pessoa cria a sala, manda o link
 (`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
 Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
-navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 30 estados por segundo que o
+navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 60 estados por segundo (e pelas teclas do adversário, repassadas na hora) que o
 servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). A partida
 rápida vale **ranking online (Elo)**, gravado pelo servidor no D1, e a fila junta gente de nível parecido. O deploy cria
 os Durable Objects (salas e fila) sozinho, pelas migrations do `wrangler.jsonc`; previews não têm salas e mostram o online como

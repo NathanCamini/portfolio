@@ -1,16 +1,19 @@
 import { FIELD, TIMING } from '../../components/volleyball/engine/constants';
 import { createGame, stepGame } from '../../components/volleyball/engine/physics';
 import type { Body, GameState, Side } from '../../components/volleyball/engine/types';
-import { applySnapshot, unpackInput, type Snapshot } from './protocol';
+import { InputTimeline } from './match';
+import { applySnapshot, NET, takeSnapshot, unpackInput, type Snapshot } from './protocol';
 
 /**
  * Client-side netcode (docs/volei-online.md, "Netcode").
  *
  * The browser doesn't wait for the server to see its own moves: it runs the
  * same physics locally ("prediction"), a few ticks ahead of the server, with
- * the player's keys applied immediately and the opponent's last known keys.
- * Each authoritative snapshot rewinds the local game to the server's state
- * and replays the player's own keys since then ("reconciliation"). Whatever
+ * the player's keys applied immediately and the opponent's keys as far as we
+ * know them (their changes are relayed the moment the server gets them).
+ * Each authoritative snapshot, and each relayed change of the opponent,
+ * rewinds the local game to the last server state and replays both players'
+ * keys since then ("reconciliation"). Whatever
  * moved because of that correction is eased in over a few frames instead of
  * snapping ("smoothing").
  */
@@ -39,7 +42,10 @@ export class Predictor {
   /** My held keys per tick, since the last snapshot (world directions). */
   private readonly history = new Map<number, number>();
   private myBits = 0;
-  private opponentBits = 0;
+  /** The opponent's keys over time: from snapshots, and from their changes relayed as they happen. */
+  private readonly opponent = new InputTimeline();
+  /** The newest authoritative state: every rewind starts from it. */
+  private base: Snapshot | null = null;
   /** Visual-only error per body (left player, right player, ball), decaying to zero. */
   readonly offsets: [Offset, Offset, Offset] = [
     [0, 0],
@@ -59,7 +65,7 @@ export class Predictor {
     this.tick++;
     this.myBits = bits;
     this.history.set(this.tick, bits);
-    this.step(bits);
+    this.step(bits, this.tick);
   }
 
   /**
@@ -79,36 +85,32 @@ export class Predictor {
     return changed ? this.tick : null;
   }
 
-  /** Authoritative state arrived: rewind to it and replay my keys up to where I am. */
+  /** Authoritative state arrived: rewind to it and replay both players' keys up to where I am. */
   receive(s: Snapshot) {
     // First snapshot, running behind the server, or hopelessly ahead: jump to it.
     if (!this.ready || s.tick >= this.tick || this.tick - s.tick > MAX_REPLAY) return this.jumpTo(s);
-
-    const before = this.positions();
-    applySnapshot(this.g, s);
-    this.opponentBits = s.inputs[this.side === 0 ? 1 : 0];
+    if (this.base && s.tick < this.base.tick) return; // older than what we already have
+    this.adopt(s);
     for (const t of this.history.keys()) if (t <= s.tick) this.history.delete(t);
+    this.resimulate();
+  }
 
-    let bits = s.inputs[this.side];
-    for (let t = s.tick + 1; t <= this.tick; t++) {
-      bits = this.history.get(t) ?? bits;
-      this.step(bits);
-    }
-
-    const after = this.positions();
-    after.forEach(([x, y], i) => {
-      const o = this.offsets[i];
-      o[0] += before[i][0] - x;
-      o[1] += before[i][1] - y;
-      if (Math.hypot(o[0], o[1]) > SNAP_PX) o[0] = o[1] = 0;
-      else if (Math.abs(before[i][0] - x) + Math.abs(before[i][1] - y) > 0.5) this.corrections++;
-    });
+  /**
+   * The opponent changed keys at `tick` (relayed by the server the moment it
+   * got them, well before the next snapshot would say so). If that tick is in
+   * what we already predicted, redo the prediction from the last snapshot
+   * with both timelines; if it's still ahead, it's simply used when we get there.
+   */
+  opponentInput(tick: number, bits: number) {
+    this.opponent.set(tick, bits);
+    if (!this.ready || !this.base || tick <= this.base.tick || tick > this.tick) return;
+    this.resimulate();
   }
 
   /** Shows exactly the server's state, dropping whatever was predicted past it (a pause, the final whistle). */
   jumpTo(s: Snapshot) {
+    this.adopt(s);
     applySnapshot(this.g, s);
-    this.opponentBits = s.inputs[this.side === 0 ? 1 : 0];
     this.tick = s.tick;
     this.history.clear();
     this.ready = true;
@@ -134,11 +136,41 @@ export class Predictor {
     return { ...this.g, player: p, cpu: c, ball: b };
   }
 
-  private step(mine: number) {
+  /** The new base for rewinds; the keys the opponent held at its tick join their timeline. */
+  private adopt(s: Snapshot) {
+    this.base = s;
+    this.opponent.set(s.tick, s.inputs[this.side === 0 ? 1 : 0]);
+    this.opponent.prune(s.tick);
+  }
+
+  /** From the base snapshot to `tick` again, with my recorded keys and the opponent's timeline. */
+  private resimulate() {
+    const s = this.base!;
+    const before = this.positions();
+    applySnapshot(this.g, s);
+    let bits = s.inputs[this.side];
+    for (let t = s.tick + 1; t <= this.tick; t++) {
+      bits = this.history.get(t) ?? bits;
+      this.step(bits, t);
+    }
+
+    const after = this.positions();
+    after.forEach(([x, y], i) => {
+      const o = this.offsets[i];
+      o[0] += before[i][0] - x;
+      o[1] += before[i][1] - y;
+      if (Math.hypot(o[0], o[1]) > SNAP_PX) o[0] = o[1] = 0;
+      else if (Math.abs(before[i][0] - x) + Math.abs(before[i][1] - y) > 0.5) this.corrections++;
+    });
+  }
+
+  /** One physics step into `tick`, rounded on snapshot ticks exactly like the server (OnlineMatch.step). */
+  private step(mine: number, tick: number) {
     const me = unpackInput(mine);
-    const them = unpackInput(this.opponentBits);
+    const them = unpackInput(this.opponent.at(tick));
     if (this.side === 0) stepGame(this.g, TIMING.STEP, me, noRandom, them);
     else stepGame(this.g, TIMING.STEP, them, noRandom, me);
+    if (tick % NET.SNAPSHOT_EVERY === 0) applySnapshot(this.g, takeSnapshot(this.g, tick, [0, 0]));
   }
 
   private positions(): [number, number][] {

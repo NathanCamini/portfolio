@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { gameConfig } from '../../config/game';
-import { NET, PROTOCOL_VERSION, type ErrorCode, type RoomView, type ServerMessage, type Snapshot } from './protocol';
+import {
+  KEY,
+  NET,
+  parseServerMessage,
+  PROTOCOL_VERSION,
+  type ErrorCode,
+  type RoomView,
+  type ServerMessage,
+  type Snapshot,
+} from './protocol';
 import { ELO, rate, type Rated } from './elo';
 import {
   newRoom,
@@ -65,7 +74,8 @@ class FakeConn implements Conn {
   inbox: ServerMessage[] = [];
   closed: { code: number; reason: string } | null = null;
   side: 0 | 1 | null = null;
-  send = (msg: ServerMessage) => void this.inbox.push(msg);
+  /** Decodes what the room encoded (binary snapshots included), like the browser does. */
+  send = (data: string | ArrayBuffer) => void this.inbox.push(parseServerMessage(data)!);
   close = (code: number, reason: string) => void (this.closed ??= { code, reason });
   bind = (side: 0 | 1 | null) => void (this.side = side);
 
@@ -186,20 +196,61 @@ describe('RoomCore lobby', () => {
 });
 
 describe('RoomCore match', () => {
-  it('runs the match at 120 Hz and broadcasts 30 snapshots a second', () => {
+  it('runs the match at 120 Hz and broadcasts 60 snapshots a second', () => {
     const { join, start, host } = setup();
     const a = join('Nathan');
     const b = join('Maria');
     start(a, b);
     expect(a.room.phase).toBe('playing');
-    const states = () => a.inbox.filter((m) => m.t === 'state').length;
-    const before = states();
+    const states = () => a.inbox.filter((m) => m.t === 'state');
+    const before = states().length;
     host.advance(1000);
-    expect(states() - before).toBeGreaterThanOrEqual(29);
-    expect(states() - before).toBeLessThanOrEqual(31);
-    const s = a.last('state')!.s;
-    expect(s.tick % NET.SNAPSHOT_EVERY).toBe(0);
-    expect(b.last('state')!.s).toEqual(s); // both players get the same truth
+    const sent = states().slice(before);
+    const rhythm = sent.filter((m) => m.s.tick % NET.SNAPSHOT_EVERY === 0);
+    expect(rhythm.length).toBeGreaterThanOrEqual(59);
+    expect(rhythm.length).toBeLessThanOrEqual(61);
+    // Anything else is an event sent the moment it happened (the serve going into play).
+    const events = sent.filter((m) => m.s.tick % NET.SNAPSHOT_EVERY !== 0);
+    for (const m of events) expect(m.s.phase).not.toBe(sent[sent.indexOf(m) - 1]?.s.phase);
+    expect(b.last('state')!.s).toEqual(a.last('state')!.s); // both players get the same truth
+  });
+
+  it('tells the loop how long to sleep: exactly until the next snapshot tick', () => {
+    const { join, start, host, room } = setup();
+    start(join('Nathan'), join('Maria'));
+    host.advance(1000);
+    const wait = room.loop();
+    expect(wait).toBeGreaterThan(0);
+    expect(wait).toBeLessThanOrEqual((NET.SNAPSHOT_EVERY * 1000) / 120 + 1e-9);
+  });
+
+  it('relays a key change to the opponent at once, with the tick it takes effect', () => {
+    const { join, start, host, say } = setup();
+    const a = join('Nathan');
+    const b = join('Maria');
+    start(a, b);
+    host.advance(200);
+    const tick = a.last('state')!.s.tick + 10;
+    say(a, { t: 'input', tick, bits: KEY.RIGHT });
+    expect(b.last('opp')).toEqual({ t: 'opp', tick, bits: KEY.RIGHT });
+    expect(a.last('opp')).toBeUndefined(); // not echoed to the sender
+    // Late: moved to the server's next tick, and the opponent is told that tick.
+    say(a, { t: 'input', tick: 1, bits: 0 });
+    expect(b.last('opp')!.tick).toBeGreaterThan(1);
+  });
+
+  it('sends a point to both players the moment it happens', () => {
+    const { join, start, host, say } = setup();
+    const a = join('Nathan');
+    const b = join('Maria');
+    start(a, b);
+    // The server (left) walks away from its own serve: the ball drops, a point.
+    host.advance(100);
+    say(a, { t: 'input', tick: a.last('state')!.s.tick + 5, bits: KEY.LEFT });
+    for (let i = 0; i < 600 && !a.inbox.some((m) => m.t === 'state' && m.s.phase === 'point'); i++) host.advance(16);
+    const point = a.inbox.find((m) => m.t === 'state' && m.s.phase === 'point');
+    expect(point).toBeDefined();
+    expect(b.inbox.some((m) => m.t === 'state' && m.s.phase === 'point')).toBe(true);
   });
 
   it('plays a whole match between two bots, then offers a rematch where the loser serves', () => {

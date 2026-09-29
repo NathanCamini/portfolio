@@ -62,12 +62,16 @@ export class OnlineMatch {
     // Straight from kickoff: no title screen online, the countdown was the lobby's.
   }
 
-  /** A player's key change. Late ones take effect on the next step; far-future ones are refused. */
-  input(side: Side, tick: number, bits: number): InputResult {
-    if (tick > this.tick + NET.MAX_INPUT_LEAD_TICKS) return 'ahead';
+  /**
+   * A player's key change. Late ones take effect on the next step; far-future ones are refused.
+   * `tick` in the answer is when it actually takes effect (what the opponent is told).
+   */
+  input(side: Side, tick: number, bits: number): { result: InputResult; tick: number } {
+    if (tick > this.tick + NET.MAX_INPUT_LEAD_TICKS) return { result: 'ahead', tick };
     const late = tick <= this.tick;
-    this.timelines[side].set(late ? this.tick + 1 : tick, bits);
-    return late ? 'late' : 'ok';
+    const at = late ? this.tick + 1 : tick;
+    this.timelines[side].set(at, bits);
+    return { result: late ? 'late' : 'ok', tick: at };
   }
 
   /** Keys each player holds on the current tick (sent along so clients can predict each other). */
@@ -103,7 +107,7 @@ export class OnlineMatch {
     return takeSnapshot(this.g, this.tick, this.held());
   }
 
-  /** A snapshot of right now that the server also adopts (off the 4-tick rhythm: pause, rejoin). */
+  /** A snapshot of right now that the server also adopts (off the snapshot rhythm: a point, a pause, a rejoin). */
   sync(): Snapshot {
     const s = this.snapshot();
     applySnapshot(this.g, s);

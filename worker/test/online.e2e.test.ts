@@ -34,6 +34,8 @@ class BotPlayer {
   side: 0 | 1 = 0;
   token = '';
   errors: string[] = [];
+  /** Opponent key changes relayed to this bot. */
+  opps = 0;
   predictor: Predictor | null = null;
   clock = new TickClock();
   private loop: ReturnType<typeof setInterval> | null = null;
@@ -53,6 +55,7 @@ class BotPlayer {
     // Node's WebSocket (undici) takes headers; a browser sends Origin by itself.
     const headers = { Origin: BASE!, ...(this.who.ip ? { 'CF-Connecting-IP': this.who.ip } : {}) };
     this.ws = new WebSocket(url, { headers } as unknown as string[]);
+    this.ws.binaryType = 'arraybuffer'; // snapshots are binary frames
     this.ws.addEventListener('message', (e: MessageEvent) => this.onMessage(parseServerMessage(e.data)!));
     this.ws.addEventListener('open', () =>
       this.send({
@@ -104,6 +107,9 @@ class BotPlayer {
       this.clock.observe(m.s.tick, performance.now());
       this.predictor?.receive(m.s);
       this.startLoop();
+    } else if (m.t === 'opp') {
+      this.predictor?.opponentInput(m.tick, m.bits);
+      this.opps++;
     } else if (m.t === 'pong') {
       this.clock.observeRtt(performance.now() - m.c);
     } else if (m.t === 'error') {
@@ -174,6 +180,7 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     a.stop();
     b.stop();
 
+    expect(a.opps).toBeGreaterThan(0); // the other bot's keys arrived as they happened, not just in snapshots
     const result = a.room!.result!;
     expect(result.forfeit).toBe(false);
     expect(Math.max(...result.score)).toBe(gameConfig.onlineWinScore);

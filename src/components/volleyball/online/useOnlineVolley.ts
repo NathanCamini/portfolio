@@ -244,6 +244,10 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
           if (n.room?.phase === 'playing') n.predictor?.receive(m.s);
           else n.predictor?.jumpTo(m.s);
           break;
+        case 'opp':
+          // The opponent's key change, relayed at once: redo the prediction with it.
+          n.predictor?.opponentInput(m.tick, m.bits);
+          break;
         case 'pong': {
           const rtt = performance.now() - m.c;
           n.clock.observeRtt(rtt);
@@ -265,6 +269,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
       const n = net.current;
       const open = () => {
         const ws = new WebSocket(`${wsOrigin()}/api/volley/rooms/${code}`);
+        ws.binaryType = 'arraybuffer'; // snapshots come as 68-byte binary frames
         n.ws = ws;
         ws.onopen = () => {
           if (n.ws !== ws) return;

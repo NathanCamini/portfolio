@@ -59,7 +59,7 @@ Controles: os mesmos do jogo local (setas ou A/D e W/espaço; botões na tela em
 │  └ render (canvas) │ ◀════════════▶ ├──────────────────────────────┤ ◀════════════▶ │  └ render (canvas) │
 └────────────────────┘  teclas ▶      │ Durable Object "sala X"      │      ◀ teclas  └────────────────────┘
                         ◀ estado      │ (worker/volley-room.ts)      │      estado ▶
-                        30×/s         │  └ RoomCore (room.ts)        │      30×/s
+                        60×/s         │  └ RoomCore (room.ts)        │      60×/s
                                       │     └ OnlineMatch (match.ts) │
                                       │        └ stepGame, 120 Hz    │
                                       └──────────────────────────────┘
@@ -129,7 +129,7 @@ colisão com sala existente é rara, e o Worker tenta outra (até 5 vezes).
 
 Mensagens JSON, uma por frame. Toda mensagem do cliente passa por `parseClientMessage`, que é estrita: confere tipos,
 faixas e tamanho, e remonta a mensagem só com os campos conhecidos. Qualquer coisa fora disso derruba a conexão com
-`bad_message`. **Versão do protocolo: 1**. Um
+`bad_message`. **Versão do protocolo: 2** (a 2 trouxe o snapshot binário, os 60 snapshots/s e o `opp`). Um
 cliente antigo recebe `bad_version`, e a página pede para recarregar.
 
 **Cliente → servidor**
@@ -148,13 +148,20 @@ cliente antigo recebe `bad_version`, e a página pede para recarregar.
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `welcome { side, token, room }` | Cadeira confirmada (0 = esquerda, 1 = direita) e o token para voltar a ela.                                                                               |
 | `room { room }`                 | O lobby mudou: fase, cadeiras (nome, conectado, pronto, ping), tempo restante, placar da sala, último resultado.                                          |
-| `state { s }`                   | Snapshot autoritativo da partida (30 por segundo).                                                                                                        |
+| `state { s }`                   | Snapshot autoritativo da partida: 60 por segundo, e na hora quando sai um ponto. Vai como **frame binário** (abaixo).                                     |
+| `opp { tick, bits }`            | O adversário mudou de teclas, valendo a partir de `tick`. Repassado no instante em que o servidor recebe o `input` dele.                                  |
 | `pong { c }`                    | Resposta ao ping.                                                                                                                                         |
 | `error { code }`                | `bad_message`, `bad_version`, `invalid_name`, `room_full`, `room_not_found`, `rate_limited`, `replaced`, `timeout`. O servidor fecha o socket em seguida. |
 
 **Snapshot:** `tick`, posição e velocidade dos três corpos (arredondadas a 1/1000 px), placar, fase do rali, tempo
 da fase, relógio da partida, quem saca, quem fez o último ponto e **as teclas que cada jogador segura** (o
-navegador usa as do adversário para prevê-lo). Tem cerca de 200 bytes.
+navegador usa as do adversário para prevê-lo).
+
+**Snapshot binário.** É a mensagem mais frequente, então vai num frame binário de **68 bytes** em vez de ~200 de
+JSON: `u8` tipo, `u32` tick, 12 × `i32` dos corpos ×1000, placar, fase, tempos ×1000, sacador, último a pontuar,
+teclas (`encodeSnapshot` / `decodeSnapshot` em `protocol.ts`). Como todo número do snapshot já vem arredondado a
+1/1000 (e nunca −0), dividir o inteiro por 1000 devolve **exatamente** o mesmo número: a quantização continua
+bit a bit. A 60 por segundo, são uns 4 KB/s por jogador. O resto das mensagens continua em JSON.
 
 ## Ciclo de vida da sala
 
@@ -235,8 +242,10 @@ quantas partidas por dia contam entre o mesmo par.
 
 ## Servidor autoritativo
 
-- **Passo fixo de 120 Hz, igual ao jogo local.** Um `setInterval` de ~60 Hz acorda o objeto, e ele roda quantos
-  passos de 1/120 s couberem no tempo real passado (no máximo 250 ms por vez, sem rajada depois de um engasgo).
+- **Passo fixo de 120 Hz, igual ao jogo local.** O objeto roda quantos passos de 1/120 s couberem no tempo real
+  passado (no máximo 250 ms por vez, sem rajada depois de um engasgo), e **dorme exatamente até o próximo tick de
+  snapshot** (`RoomCore.loop` devolve quantos ms faltam). Antes era um `setInterval` de 60 Hz, que rodava 2 passos
+  por vez: um snapshot podia sair até 16 ms depois do tick dele.
 - **Teclas com hora marcada.** Cada `input` diz em qual _tick_ passa a valer. O servidor guarda uma linha do tempo
   por jogador (`InputTimeline`) e aplica a tecla exatamente naquele passo, o mesmo em que o navegador já a aplicou
   na previsão.
@@ -244,11 +253,20 @@ quantas partidas por dia contam entre o mesmo par.
   - Uma marcada mais de 1 s no futuro é recusada.
 - **Determinismo.** No modo online o motor não usa nenhum número aleatório: o mesmo início com as mesmas teclas dá
   sempre a mesma partida. Os testes provam isso rodando a mesma partida duas vezes.
-- **30 snapshots por segundo** (um a cada 4 passos). Os outros 3 passos o navegador prevê sozinho.
+- **60 snapshots por segundo** (um a cada 2 passos; eram 30). Em média, cada snapshot chega uns 8 ms mais novo.
+- **Eventos na hora.** Quando a fase muda (um ponto, o saque voltando ao jogo, o apito final), o estado sai
+  **imediatamente**, fora do ritmo, via `sync()`: o servidor adota o mesmo estado arredondado que envia.
+- **Teclas do adversário na hora.** Ao receber um `input`, a sala o agenda e repassa ao outro jogador como
+  `opp { tick, bits }`, com o _tick_ em que ele vale de fato (um atrasado vale no próximo). Antes o navegador só
+  descobria a mudança pelo campo `inputs` do snapshot seguinte: até 33 ms de espera pelo snapshot, mais até 16 ms do
+  `setInterval`, e sem o _tick_ exato.
+- **Serializa uma vez.** Um `broadcast` codifica a mensagem uma vez só (`encodeServerMessage`) e manda o mesmo texto
+  (ou os mesmos bytes) para as duas conexões; antes era um `JSON.stringify` por conexão.
 - **Quantização.** O snapshot arredonda posições e velocidades a 1/1000 px. Para o navegador e o servidor
-  continuarem idênticos, o servidor **adota o próprio estado arredondado** a cada snapshot enviado (e também ao
-  pausar). Sem isso, um pulo previsto pelo navegador divergia do servidor por arredondamento, e o seu próprio
-  jogador "tremia" nas correções. Com isso, até 80 ms de latência a correção do próprio corpo é **exatamente zero**.
+  continuarem idênticos, o servidor **adota o próprio estado arredondado** a cada tick de snapshot (e também ao
+  pausar e nos eventos fora do ritmo), e o navegador **faz o mesmo arredondamento nos mesmos ticks** quando prevê.
+  Com as mesmas teclas, a previsão é bit a bit igual ao servidor. Sem isso, um pulo previsto pelo navegador divergia
+  por arredondamento, e o seu próprio jogador "tremia" nas correções.
 
 ## Netcode no navegador
 
@@ -260,17 +278,19 @@ servidor, e corrige quando chega a verdade.
 - lê as teclas;
 - avança a simulação até o _tick_ alvo;
 - aplica as próprias teclas na hora;
-- para o adversário, repete as últimas teclas que o servidor disse que ele segurava;
+- para o adversário, usa a **linha do tempo das teclas dele**: o que cada snapshot diz que ele segurava, mais cada
+  mudança repassada pelo servidor (`opp`), no _tick_ exato;
 - quando as teclas mudam, manda `input { tick, bits }` com o _tick_ em que a mudança foi aplicada.
 
-**Reconciliação.** Quando chega um snapshot (que já é "passado", com meia ida e volta de atraso):
+**Reconciliação.** Quando chega um snapshot (que já é "passado", com meia ida e volta de atraso), ou uma mudança de
+tecla do adversário que cai num _tick_ que já foi previsto:
 
-1. volta o jogo para o estado do servidor;
-2. troca as teclas do adversário pelas reais;
-3. **reaplica as próprias teclas** gravadas desde aquele _tick_ até o presente.
+1. volta o jogo para o **último snapshot**;
+2. **refaz a previsão** até o presente com as duas linhas do tempo: as próprias teclas gravadas e as do adversário.
 
-O resultado é a previsão corrigida pelo que o servidor sabe. Se a previsão estiver muito atrás, ou mais de 150
-_ticks_ (1,25 s) à frente, o navegador simplesmente pula para o estado do servidor.
+O `opp` chega antes do snapshot que traria a mesma informação, então a jogada do outro aparece mais cedo, e a bola
+que ela muda também. Se a previsão estiver muito atrás, ou mais de 150 _ticks_ (1,25 s) à frente, o navegador
+simplesmente pula para o estado do servidor. Um snapshot mais velho que o último recebido é ignorado.
 
 **Suavização.** A diferença entre a previsão antiga e a corrigida não aparece de uma vez. Ela vira um deslocamento
 visual que some exponencialmente (e^(−12·t), 95% em ~250 ms). Correções enormes, acima de 110 px (um saque novo, um
@@ -299,21 +319,31 @@ que o servidor já passou.
 você no presente, ela atravessaria a sua cabeça ou quicaria no vazio. Prever o jogo inteiro com o mesmo motor
 determinístico deixa bola e jogador coerentes, e a suavização esconde as correções.
 
-**Medido** num simulador de rede milissegundo a milissegundo (`predictor.test.ts`). As medições usam dois bots com
-reflexos humanos, três sementes por linha, e latência de ida (a ida e volta é o dobro):
+**Medido** num simulador de rede milissegundo a milissegundo (`predictor.test.ts`): o servidor, dois navegadores e
+dois bots com reflexos humanos, cada mensagem atrasada pela latência de ida (a ida e volta é o dobro) mais uma
+variação aleatória, e cada direção de cada conexão entregando **em ordem**, como o TCP. Média de três sementes. O
+erro é o que a tela mostra para cada _tick_ (depois das correções que já tinham chegado) contra a verdade do
+servidor. "Antes" é o esquema anterior: 30 snapshots/s, teclas do adversário só pelos snapshots, ponto no próximo
+snapshot.
 
-| Latência (ida) | Variação | Correção do próprio corpo em rali | Erro médio da bola prevista | Placar final igual nos 3 |
-| -------------: | -------: | --------------------------------: | --------------------------: | :----------------------: |
-|           0 ms |     0 ms |                              0 px |                        0 px |           sim            |
-|          20 ms |     5 ms |                              0 px |                     0,06 px |           sim            |
-|          40 ms |     0 ms |                              0 px |                     0,15 px |           sim            |
-|          80 ms |    30 ms |                              0 px |                  1,5–1,8 px |           sim            |
-|         150 ms |    50 ms |           22–104 px (após saques) |                  5,2–6,6 px |           sim            |
-|         250 ms |    80 ms |                          35–83 px |                      ~20 px |           sim            |
+| Latência (ida) | Variação | Próprio corpo corrigido | Bola: antes → depois | Adversário: antes → depois |
+| -------------: | -------: | ----------------------: | -------------------: | -------------------------: |
+|           0 ms |     0 ms |                    0 px |             0 → 0 px |                 0,6 → 0 px |
+|          40 ms |     0 ms |                    0 px |       0,15 → 0,06 px |               4,5 → 2,7 px |
+|          80 ms |    30 ms |                    0 px |       1,55 → 0,84 px |             17,4 → 11,9 px |
+|         150 ms |    50 ms |                    0 px |       6,14 → 3,73 px |             38,4 → 30,3 px |
+|         250 ms |    80 ms |                até 7 px |       18,3 → 12,8 px |             62,6 → 56,8 px |
 
-Até ~80 ms de ida (Brasil ↔ Brasil, Brasil ↔ EUA leste) o seu jogador nunca é corrigido e a bola prevista erra
-menos de 2 px, invisível numa quadra de 960 px. Acima disso, as correções aparecem logo depois dos saques: o momento
-do saque depende de onde a bola do **outro** caiu, e essa informação chega tarde.
+O placar final dos dois navegadores bate com o do servidor em todas as linhas. O **seu** jogador nunca é corrigido
+até 150 ms: as suas teclas chegam ao servidor antes do _tick_ delas, e a previsão é bit a bit igual. O que ainda
+erra é o que depende do outro: você só sabe da jogada dele depois de ida e volta dele até o servidor e do servidor
+até você. O repasse (`opp`) e os 60 snapshots/s cortam 35–60% do erro da bola e 10–40% do erro do adversário.
+
+> Correção de uma versão anterior deste documento: a tabela antiga mostrava "22–104 px de correção do próprio corpo
+> depois dos saques" a 150 ms. Era um defeito do simulador, não do jogo: ele atrasava cada mensagem de forma
+> independente, e às vezes um snapshot velho chegava depois de um novo. O navegador antigo voltava para esse snapshot
+> e perdia teclas. Um WebSocket (TCP) nunca reordena mensagens, então isso não acontecia de verdade. Agora o
+> simulador entrega em ordem, e o `Predictor` também ignora um snapshot mais velho que o último.
 
 ## Reconexão
 
@@ -377,7 +407,8 @@ npm run check                                  # tudo abaixo, menos o e2e
 npx vitest run src/lib/volley-online worker    # só o online
 ```
 
-- `protocol.test.ts`: códigos de sala, teclas e espelhamento, snapshot (ida e volta), parser estrito.
+- `protocol.test.ts`: códigos de sala, teclas e espelhamento, snapshot (ida e volta, e o frame binário de 68 bytes
+  decodificando bit a bit, sinal do zero incluído), parser estrito.
 - `match.test.ts`:
   - linha do tempo das teclas;
   - determinismo (mesma partida duas vezes);
@@ -385,10 +416,14 @@ npx vitest run src/lib/volley-online worker    # só o online
   - teclas atrasadas e adiantadas.
 - `predictor.test.ts`:
   - espelhamento, relógio e `jumpTo`;
+  - uma tecla do adversário (`opp`) que cai no passado: a previsão refaz e fica bit a bit igual ao servidor;
+  - snapshot mais velho que o último é ignorado;
   - o **simulador de rede** da tabela acima: servidor, dois navegadores e bots trocando mensagens com latência e
-    variação, milissegundo a milissegundo.
+    variação, milissegundo a milissegundo, em ordem como o TCP; e a comparação antes/depois (o novo esquema tem que
+    errar pelo menos 25% menos na bola e 20% menos no adversário).
 - `room.test.ts`, a sala inteira com relógio falso:
-  - lobby, contagem e cancelamento, rate limit, 30 snapshots/s;
+  - lobby, contagem e cancelamento, rate limit, 60 snapshots/s e o laço que dorme até o próximo snapshot;
+  - teclas repassadas ao adversário (`opp`) com o _tick_ efetivo, e o ponto mandado na hora;
   - partida completa e revanche;
   - pausa e volta com token (estado congelado idêntico);
   - W.O. por tempo e por saída, aba duplicada;
@@ -471,8 +506,9 @@ migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo i
 
 ## Limitações conhecidas
 
-- **Ping alto.** Acima de ~120 ms de ida, o seu jogador pode ser corrigido logo depois dos saques (ver a tabela).
-  A sala nasce no data center perto de quem a criou; entre continentes o jogo funciona, mas com correções visíveis.
+- **Ping alto.** O seu jogador fica exato até ~150 ms de ida, mas a bola e o adversário são previsões, e o erro
+  cresce com a latência (ver a tabela): acima de ~150 ms, correções ficam visíveis. A sala nasce no data center perto
+  de quem a criou; entre continentes o jogo funciona, mas com o adversário "escorregando" de vez em quando.
 - **Objeto despejado no meio da partida.** Se a Cloudflare tirar o objeto da memória durante uma partida (deploy
   novo, manutenção), a partida em andamento se perde. A sala volta ao lobby com as cadeiras, e os dois podem
   começar outra. O lobby e o placar da sala sobrevivem, porque estão no armazenamento.

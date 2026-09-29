@@ -68,12 +68,12 @@ describe('OnlineMatch', () => {
   it('applies a late input on the next step and refuses far-future ones', () => {
     const match = new OnlineMatch(0);
     for (let i = 0; i < 10; i++) match.step();
-    expect(match.input(0, 5, KEY.LEFT)).toBe('late');
+    expect(match.input(0, 5, KEY.LEFT)).toEqual({ result: 'late', tick: match.tick + 1 });
     expect(match.held()[0]).toBe(0);
     match.step();
     expect(match.held()[0]).toBe(KEY.LEFT);
-    expect(match.input(1, match.tick + NET.MAX_INPUT_LEAD_TICKS + 1, KEY.JUMP)).toBe('ahead');
-    expect(match.input(1, match.tick + 3, KEY.JUMP)).toBe('ok');
+    expect(match.input(1, match.tick + NET.MAX_INPUT_LEAD_TICKS + 1, KEY.JUMP).result).toBe('ahead');
+    expect(match.input(1, match.tick + 3, KEY.JUMP)).toEqual({ result: 'ok', tick: match.tick + 3 });
   });
 
   it('moves the right-hand player with the second input, not the CPU', () => {
