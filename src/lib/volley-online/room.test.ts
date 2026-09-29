@@ -136,7 +136,10 @@ describe('RoomCore lobby', () => {
     const { join, room, host } = setup();
     join('Nathan');
     join('Maria');
-    expect(join('Carlos').error).toBe('room_full');
+    // A stranger in a full room watches instead of being turned away.
+    const carlos = join('Carlos');
+    expect(carlos.error).toBeUndefined();
+    expect(carlos.side).toBe('watch');
 
     const { join: join2, room: room2, host: host2 } = setup();
     const rude = join2('Porra');
@@ -338,6 +341,54 @@ describe('RoomCore match', () => {
     // The result still names who left (their seat is already free).
     expect(a.room).toMatchObject({ phase: 'over', result: { winner: 0, forfeit: true, names: ['Nathan', 'Maria'] } });
     expect(a.room.seats[1]).toBeNull();
+  });
+
+  /** Browser ids (the `pid` in localStorage). */
+  const [PA, PB, PC] = ['a', 'b', 'c'].map((c) => c.repeat(32));
+
+  it('gives the seat back to a player who closed the tab and opened the link again (no token, same browser)', () => {
+    const { join, start, host, room } = setup();
+    const a = join('Nathan', undefined, { pid: PA });
+    const b = join('Maria', undefined, { pid: PB });
+    start(a, b);
+    room.closed(b);
+    expect(a.room.phase).toBe('paused');
+    host.advance(NET.RECONNECT_GRACE_MS - 1000); // still inside the 20 s
+
+    const stranger = join('Carlos', undefined, { pid: PC });
+    expect(stranger.side).toBe('watch'); // a full room: someone else only watches
+
+    const back = join('Maria', undefined, { pid: PB });
+    expect(back.error).toBeUndefined();
+    expect(back.last('welcome')).toMatchObject({ side: 1, token: b.last('welcome')!.token });
+    expect(a.room.phase).toBe('countdown');
+    expect(a.room.live).toBe(true); // the same match resumes
+    host.advance(2000); // past the original deadline: nobody forfeits
+    expect(a.room.phase).not.toBe('over');
+  });
+
+  it('takes over a seat whose socket the server still thinks is alive (same browser, full room)', () => {
+    const { join, start } = setup();
+    const a = join('Nathan', undefined, { pid: PA });
+    const b = join('Maria', undefined, { pid: PB });
+    start(a, b);
+    const back = join('Maria', undefined, { pid: PB });
+    expect(b.error).toBe('replaced');
+    expect(back.last('welcome')).toMatchObject({ side: 1 });
+  });
+
+  it('still seats two tabs of one browser against each other', () => {
+    const { join } = setup();
+    const a = join('Nathan', undefined, { pid: PA });
+    const b = join('Maria', undefined, { pid: PA });
+    expect(a.error).toBeUndefined();
+    expect(b.last('welcome')).toMatchObject({ side: 1 });
+    // A third tab of that browser, with both seats taken and connected: it watches.
+    expect(join('Carlos', undefined, { pid: PA }).side).toBe('watch');
+  });
+
+  it('holds the seat for 20 seconds', () => {
+    expect(NET.RECONNECT_GRACE_MS).toBe(20_000);
   });
 
   it('keeps the newest tab when the same player opens the room twice', () => {

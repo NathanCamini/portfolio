@@ -26,3 +26,43 @@ export function showRoomInUrl(code: string | null) {
   if (code === current) return; // already there (or no room hash to clear)
   history.replaceState(history.state, '', `${location.pathname}${location.search}${code ? roomHash(code) : ''}`);
 }
+
+const ACTIVE_KEY = 'volley-online:active';
+
+/**
+ * The room this browser is seated in, kept in localStorage (unlike the hash,
+ * it survives closing the tab): reopening the site while that match is still
+ * on goes straight back to it (VolleyballSection). Cleared on leaving, at the
+ * final whistle, and when the server turns us away.
+ */
+export function rememberActiveRoom(code: string | null) {
+  try {
+    if (code) localStorage.setItem(ACTIVE_KEY, code);
+    else localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* no storage: only the link (or the hash) brings you back */
+  }
+}
+
+/** The room to go back to, if the page was closed mid-match and that match is still on. */
+export async function activeRoom(): Promise<string | null> {
+  let code: string | null = null;
+  try {
+    code = normalizeRoomCode(localStorage.getItem(ACTIVE_KEY) ?? '');
+  } catch {
+    return null;
+  }
+  if (!isRoomCode(code)) return null;
+  try {
+    const res = await fetch(`/api/volley/rooms/${code}`, { cache: 'no-store' });
+    if (res.ok) {
+      const { phase } = (await res.json()) as { phase: string };
+      if (phase === 'countdown' || phase === 'playing' || phase === 'paused') return code;
+    }
+    if (res.status !== 404 && !res.ok) return null; // can't tell: keep it for next time
+  } catch {
+    return null;
+  }
+  rememberActiveRoom(null);
+  return null;
+}

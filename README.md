@@ -91,7 +91,7 @@ em dobro.
 (`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
 Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
 navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 60 estados por segundo (e pelas teclas do adversário, repassadas na hora) que o
-servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). A partida
+servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 20 s), mesmo se fechou a aba: reabrir o site ou o link devolve a cadeira. A partida
 rápida vale **ranking online (Elo)**, gravado pelo servidor no D1, e a fila junta gente de nível parecido. Durante a
 partida há **reações** (teclas 1–6), um **indicador de conexão** dos dois jogadores, e quem abre o link de uma sala
 cheia **assiste** ao vivo; o botão **Ao vivo** lista as partidas rápidas em andamento para assistir. O deploy cria

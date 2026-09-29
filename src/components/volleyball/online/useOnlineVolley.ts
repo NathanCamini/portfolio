@@ -24,7 +24,7 @@ import type { Input, Side } from '../engine/types';
 import { KEYMAP, type GameKey } from '../useVolleyballGame';
 import { parseQueueServerMessage, type QueueClientMessage } from '@/lib/volley-online/queue';
 import { SnapshotBuffer } from '@/lib/volley-online/spectator';
-import { showRoomInUrl } from './link';
+import { rememberActiveRoom, showRoomInUrl } from './link';
 import { playerId } from './player';
 
 /**
@@ -46,7 +46,7 @@ import { playerId } from './player';
 export type OnlineStatus = 'idle' | 'searching' | 'working' | 'online' | 'reconnecting';
 
 /** Delays between reconnection attempts: ~16 s in total, a bit more than the seat is held. */
-const RETRY_MS = [300, 700, 1500, 2500, 4000, 7000];
+const RETRY_MS = [300, 700, 1500, 2500, 4000, 5000, 7000];
 
 /** A reaction on screen. `side` is the room's side (0 = left seat). */
 export interface Reaction {
@@ -201,6 +201,8 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     setPing(null);
     setDeadline(null);
     showRoomInUrl(null);
+    // Gave up reconnecting: reopening the site may still get the seat back. Anything else is final.
+    if (why !== 'network') rememberActiveRoom(null);
     setStatus('idle');
     setError(why);
   }, []);
@@ -230,6 +232,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
         case 'watching':
           n.watch = true;
           n.side = null;
+          rememberActiveRoom(null);
           n.retries = 0;
           showRoomInUrl(n.code);
           showRoom(m.room);
@@ -252,6 +255,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
           n.clock.reset();
           writeToken(n.code!, m.token);
           showRoomInUrl(n.code); // a refresh comes back to this room (and seat)
+          rememberActiveRoom(n.code); // and so does reopening the site after closing the tab
           const seat = m.room.seats[m.side];
           if (seat) rememberName(seat.name); // the next room (and the ranking form) start with it
           showRoom(m.room);
@@ -277,6 +281,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
           // Stopped (paused, final whistle): show exactly where the server stopped, not our guess past it.
           if (phase !== 'playing' && before?.phase === 'playing' && n.last) n.predictor?.jumpTo(n.last);
           showRoom(m.room);
+          if (phase === 'over') rememberActiveRoom(null); // nothing left to come back to
           if (phase === 'over' && before?.phase !== 'over' && m.room.result?.winner === n.side) {
             void celebrate(originOf(canvasRef.current), 1.2);
           }
@@ -364,11 +369,9 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
         if (res.status === 404) why = 'room_not_found';
         else if (res.status === 503) why = 'unavailable';
         else if (!res.ok) why = 'network';
-        else {
-          const info = (await res.json()) as { players: number };
-          // Full, and not our seat: watch instead.
-          n.watch = info.players >= 2 && !readToken(code);
-        }
+        // Always as a player: the server knows whether a seat is ours (token, or this browser's id),
+        // and seats a stranger in a full room as a spectator.
+        else n.watch = false;
       } catch {
         why = 'network';
       }
@@ -637,6 +640,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
       n.queue?.close(1000);
       n.queue = null;
       showRoomInUrl(null);
+      rememberActiveRoom(null); // closing the panel leaves the room (a W.O. mid-match)
     };
   }, []);
 

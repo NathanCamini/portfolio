@@ -35,6 +35,8 @@ class BotPlayer {
   side: 0 | 1 = 0;
   token = '';
   errors: string[] = [];
+  /** Seated as a spectator (the room was full). */
+  watching = false;
   /** Opponent key changes relayed to this bot. */
   opps = 0;
   predictor: Predictor | null = null;
@@ -71,7 +73,7 @@ class BotPlayer {
       () => this.send({ t: 'ping', c: performance.now(), rtt: Math.round(this.clock.rtt) }),
       500,
     );
-    return this.until((m) => m.t === 'welcome' || m.t === 'error');
+    return this.until((m) => m.t === 'welcome' || m.t === 'watching' || m.t === 'error');
   }
 
   send(msg: object) {
@@ -113,6 +115,8 @@ class BotPlayer {
       this.opps++;
     } else if (m.t === 'pong') {
       this.clock.observeRtt(performance.now() - m.c);
+    } else if (m.t === 'watching') {
+      this.watching = true;
     } else if (m.t === 'error') {
       this.errors.push(m.code);
     }
@@ -266,13 +270,45 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     [a, b].forEach((p) => (p.stop(), p.ws.close()));
   });
 
-  it('refuses a third player and an unknown room', { timeout: 30_000 }, async () => {
+  it(
+    'comes back to the seat from a new tab (no token, same browser id) within the grace period',
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      const code = await createRoom();
+      const ids = [1, 2].map(() => crypto.randomUUID().replace(/-/g, ''));
+      const a = new BotPlayer('Ana Volta', 7, { pid: ids[0] });
+      const b = new BotPlayer('Beto Volta', 8, { pid: ids[1] });
+      await a.connect(code);
+      await b.connect(code);
+      a.send({ t: 'ready', ready: true });
+      b.send({ t: 'ready', ready: true });
+      await a.until((m) => m.t === 'state' && m.s.tick > 120 * 2);
+
+      // B closes the tab: the token is gone with it, the browser id isn't.
+      b.drop();
+      await a.until((m) => m.t === 'room' && m.room.phase === 'paused');
+      await new Promise((r) => setTimeout(r, 1000));
+      const b2 = new BotPlayer('Beto Volta', 8, { pid: ids[1] });
+      await b2.connect(code);
+      expect(b2.errors).toEqual([]);
+      expect(b2.watching).toBe(false);
+      expect(b2.side).toBe(b.side);
+      await a.until((m) => m.t === 'room' && m.room.phase === 'playing');
+      expect(a.room!.live).toBe(true);
+      [a, b2].forEach((p) => (p.stop(), p.ws.close()));
+    },
+  );
+
+  it('seats a third person as a spectator, and refuses an unknown room', { timeout: 30_000 }, async () => {
     const code = await createRoom();
     const players = [new BotPlayer('Uno', 1), new BotPlayer('Dos', 2), new BotPlayer('Tres', 3)];
     await players[0].connect(code);
     await players[1].connect(code);
     await players[2].connect(code);
-    expect(players.map((p) => p.errors)).toEqual([[], [], ['room_full']]);
+    expect(players.map((p) => p.errors)).toEqual([[], [], []]);
+    expect(players.map((p) => p.watching)).toEqual([false, false, true]);
 
     // A code nobody created: the Durable Object answers 404 before upgrading, so the socket never opens.
     const ghost = new WebSocket(`${BASE!.replace(/^http/, 'ws')}/api/volley/rooms/ZZZZ9`, {

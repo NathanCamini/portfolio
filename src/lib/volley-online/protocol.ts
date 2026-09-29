@@ -20,7 +20,7 @@ export const NET = {
   /** 3-2-1 before a match (and before resuming a paused one). */
   COUNTDOWN_MS: 3000,
   /** How long a dropped player's seat is held (the match stays paused meanwhile). */
-  RECONNECT_GRACE_MS: 15_000,
+  RECONNECT_GRACE_MS: 20_000,
   /** A socket that doesn't say hello by then is closed. */
   HELLO_TIMEOUT_MS: 5_000,
   /** Largest message a client may send (the biggest legit one, hello, is ~100 bytes). */
