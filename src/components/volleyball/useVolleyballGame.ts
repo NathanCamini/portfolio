@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { GameStrings } from '@/i18n/types';
 import { readPalette } from '@/lib/palette';
 import { TIMING } from './engine/constants';
-import { createGame, playerWon, primaryAction, setStage, stepGame } from './engine/physics';
+import { createGame, playerWon, primaryAction, stepGame } from './engine/physics';
 import { renderGame, type View } from './engine/render';
-import type { StageId } from './engine/stages';
+import type { Stage, StageId } from './engine/stages';
 import type { GameState, Input } from './engine/types';
 
 export type GameKey = keyof Input;
+
+/** This loop only plays the local stages; the online match has its own (online/useOnlineVolley.ts). */
+const localStage = (stage: Stage) => stage.id as StageId;
 
 /** The final whistle of any stage. */
 export interface MatchEnd {
@@ -22,7 +25,8 @@ export interface MatchEnd {
   durationMs: number;
 }
 
-const KEYMAP: Record<string, GameKey> = {
+/** Arrows or WASD to move, up / W / space to jump (the online match uses the same keys). */
+export const KEYMAP: Record<string, GameKey> = {
   ArrowLeft: 'left',
   a: 'left',
   A: 'left',
@@ -40,7 +44,7 @@ interface Options {
   stageRef: RefObject<HTMLElement | null>;
   panelRef: RefObject<HTMLElement | null>;
   strings: GameStrings;
-  /** Stage shown when the panel opens; afterwards use `selectStage`. */
+  /** Stage shown when the game mounts (the panel remounts it on a mode switch). */
   initialStage: StageId;
   /** An overlay (leaderboard) is open: simulation paused, keys left to the page, no new match. */
   locked: boolean;
@@ -98,8 +102,8 @@ export function useVolleyballGame({
   const kick = useCallback((g: GameState) => {
     const { phase, stage } = g;
     primaryAction(g);
-    if (g.stage !== stage) events.current.onStage(g.stage.id);
-    else if (g.phase !== phase) events.current.onKickoff(g.stage.id);
+    if (g.stage !== stage) events.current.onStage(localStage(g.stage));
+    else if (g.phase !== phase) events.current.onKickoff(localStage(g.stage));
   }, []);
 
   useEffect(() => {
@@ -148,7 +152,7 @@ export function useVolleyballGame({
       }
       if (before !== 'over' && g.phase === 'over') {
         events.current.onFinish({
-          stage: g.stage.id,
+          stage: localStage(g.stage),
           points: g.score[0],
           won: playerWon(g),
           durationMs: Math.round(g.matchTime),
@@ -210,10 +214,5 @@ export function useVolleyballGame({
   const restart = useCallback(() => {
     if (game.current) kick(game.current);
   }, [kick]);
-  /** Mode switch: that stage's title screen (a match in progress is dropped). */
-  const selectStage = useCallback((id: StageId) => {
-    if (game.current) setStage(game.current, id);
-  }, []);
-
-  return { press, release, action, restart, selectStage };
+  return { press, release, action, restart };
 }

@@ -1,0 +1,407 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { rememberName } from '@/components/ranking/useRanking';
+import type { GameStrings, OnlineErrorKey } from '@/i18n/types';
+import { celebrate, originOf } from '@/lib/confetti';
+import { readPalette } from '@/lib/palette';
+import { mirrorState, Predictor, TickClock } from '@/lib/volley-online/predictor';
+import {
+  mirrorBits,
+  NET,
+  packInput,
+  parseServerMessage,
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type RoomView,
+  type ServerMessage,
+  type Snapshot,
+} from '@/lib/volley-online/protocol';
+import { createGame } from '../engine/physics';
+import { renderGame, type View } from '../engine/render';
+import type { Input, Side } from '../engine/types';
+import { KEYMAP, type GameKey } from '../useVolleyballGame';
+import { showRoomInUrl } from './link';
+
+/**
+ * Browser side of the online match (docs/volei-online.md, "No navegador").
+ *
+ * - One WebSocket to the room's Durable Object; if it drops mid-match the
+ *   hook reconnects with the seat's token (kept per room in sessionStorage)
+ *   while the server holds the seat and pauses the match.
+ * - A requestAnimationFrame loop runs the prediction (Predictor.advanceTo up
+ *   to TickClock's target tick), sends key changes, eases corrections out
+ *   and draws. The right-hand player sees the court mirrored.
+ * - React state only holds what the lobby UI shows (room, side, status,
+ *   error, ping); everything per-frame lives in a ref.
+ */
+
+export type OnlineStatus = 'idle' | 'working' | 'online' | 'reconnecting';
+
+/** Delays between reconnection attempts: ~16 s in total, a bit more than the seat is held. */
+const RETRY_MS = [300, 700, 1500, 2500, 4000, 7000];
+
+const tokenKey = (code: string) => `volley-online:${code}`;
+const readToken = (code: string) => {
+  try {
+    return sessionStorage.getItem(tokenKey(code)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+const writeToken = (code: string, token: string | null) => {
+  try {
+    if (token) sessionStorage.setItem(tokenKey(code), token);
+    else sessionStorage.removeItem(tokenKey(code));
+  } catch {
+    /* private mode: a refresh just can't reclaim the seat */
+  }
+};
+
+interface Net {
+  ws: WebSocket | null;
+  code: string | null;
+  name: string;
+  side: Side | null;
+  room: RoomView | null;
+  predictor: Predictor | null;
+  /** The newest authoritative state (shown as is whenever the match isn't running). */
+  last: Snapshot | null;
+  clock: TickClock;
+  keys: Input;
+  retries: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  /** Bumped by every create/enter/leave: an answer to an older attempt is ignored. */
+  attempt: number;
+  /** No reconnecting: the player left, or the server refused us for good. */
+  stopped: boolean;
+}
+
+interface Options {
+  canvasRef: RefObject<HTMLCanvasElement | null>;
+  stageRef: RefObject<HTMLElement | null>;
+  panelRef: RefObject<HTMLElement | null>;
+  strings: GameStrings;
+  /** The "you" label and nothing else is localised on the canvas; names come from the room. */
+  youLabel: string;
+}
+
+export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLabel }: Options) {
+  const [status, setStatus] = useState<OnlineStatus>('idle');
+  const [room, setRoom] = useState<RoomView | null>(null);
+  const [side, setSide] = useState<Side | null>(null);
+  const [error, setError] = useState<OnlineErrorKey | null>(null);
+  const [ping, setPing] = useState<number | null>(null);
+  /** performance.now() when the room's countdown / reconnection window ends. */
+  const [deadline, setDeadline] = useState<number | null>(null);
+
+  const net = useRef<Net>({
+    ws: null,
+    code: null,
+    name: '',
+    side: null,
+    room: null,
+    predictor: null,
+    last: null,
+    clock: new TickClock(),
+    keys: { left: false, right: false, jump: false },
+    retries: 0,
+    retryTimer: null,
+    attempt: 0,
+    stopped: true,
+  });
+  const labels = useRef({ strings, youLabel });
+  useEffect(() => {
+    labels.current = { strings, youLabel };
+  }, [strings, youLabel]);
+
+  const send = useCallback((msg: ClientMessage) => {
+    const ws = net.current.ws;
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  }, []);
+
+  /** Back to the start screen (optionally with an error to explain why). */
+  const reset = useCallback((why: OnlineErrorKey | null) => {
+    const n = net.current;
+    n.stopped = true;
+    n.attempt++;
+    if (n.retryTimer) clearTimeout(n.retryTimer);
+    const ws = n.ws;
+    n.ws = null;
+    ws?.close(1000);
+    Object.assign(n, { code: null, side: null, room: null, predictor: null, last: null, retries: 0, retryTimer: null });
+    setRoom(null);
+    setSide(null);
+    setPing(null);
+    setDeadline(null);
+    showRoomInUrl(null);
+    setStatus('idle');
+    setError(why);
+  }, []);
+
+  const showRoom = useCallback((room: RoomView) => {
+    net.current.room = room;
+    setRoom(room);
+    setDeadline(room.remainingMs === null ? null : performance.now() + room.remainingMs);
+  }, []);
+
+  const onMessage = useCallback(
+    (m: ServerMessage) => {
+      const n = net.current;
+      switch (m.t) {
+        case 'welcome': {
+          n.side = m.side;
+          n.retries = 0;
+          n.predictor = new Predictor(m.side);
+          n.last = null;
+          n.clock.reset();
+          writeToken(n.code!, m.token);
+          showRoomInUrl(n.code); // a refresh comes back to this room (and seat)
+          const seat = m.room.seats[m.side];
+          if (seat) rememberName(seat.name); // the next room (and the ranking form) start with it
+          showRoom(m.room);
+          setSide(m.side);
+          setStatus('online');
+          setError(null);
+          send({ t: 'ping', c: performance.now() });
+          break;
+        }
+        case 'room': {
+          const before = n.room;
+          const phase = m.room.phase;
+          if (phase === 'countdown' && !m.room.live && n.side !== null) {
+            // A new match (not a resume): start predicting from scratch.
+            n.predictor = new Predictor(n.side);
+            n.last = null;
+          }
+          // The server's tick stood still during a pause/countdown: re-learn its clock.
+          if (phase === 'playing' && before?.phase !== 'playing') n.clock.reset();
+          // Stopped (paused, final whistle): show exactly where the server stopped, not our guess past it.
+          if (phase !== 'playing' && before?.phase === 'playing' && n.last) n.predictor?.jumpTo(n.last);
+          showRoom(m.room);
+          if (phase === 'over' && before?.phase !== 'over' && m.room.result?.winner === n.side) {
+            void celebrate(originOf(canvasRef.current), 1.2);
+          }
+          break;
+        }
+        case 'state':
+          n.last = m.s;
+          n.clock.observe(m.s.tick, performance.now());
+          if (n.room?.phase === 'playing') n.predictor?.receive(m.s);
+          else n.predictor?.jumpTo(m.s);
+          break;
+        case 'pong': {
+          const rtt = performance.now() - m.c;
+          n.clock.observeRtt(rtt);
+          setPing(Math.round(n.clock.rtt));
+          break;
+        }
+        case 'error':
+          // Every error closes the socket; none of them is fixed by retrying.
+          if (m.code === 'replaced' || m.code === 'room_full') writeToken(n.code ?? '', null);
+          reset(m.code);
+          break;
+      }
+    },
+    [canvasRef, reset, send, showRoom],
+  );
+
+  const connect = useCallback(
+    (code: string) => {
+      const n = net.current;
+      const open = () => {
+        const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/volley/rooms/${code}`);
+        n.ws = ws;
+        ws.onopen = () => {
+          if (n.ws !== ws) return;
+          const token = readToken(code);
+          const hello: ClientMessage = { t: 'hello', v: PROTOCOL_VERSION, name: n.name, ...(token ? { token } : {}) };
+          ws.send(JSON.stringify(hello));
+        };
+        ws.onmessage = (e) => {
+          const m = parseServerMessage(e.data);
+          if (m && n.ws === ws) onMessage(m);
+        };
+        ws.onclose = () => {
+          if (n.ws !== ws || n.stopped) return;
+          n.ws = null;
+          // Dropped: try again while the server holds our seat.
+          if (n.retries >= RETRY_MS.length) return reset('network');
+          setStatus('reconnecting');
+          n.retryTimer = setTimeout(open, RETRY_MS[n.retries++]);
+        };
+      };
+      open();
+    },
+    [onMessage, reset],
+  );
+
+  /** Checks the room over plain HTTP first: a failed WebSocket handshake can't say why. */
+  const enter = useCallback(
+    async (code: string, name: string, attempt = ++net.current.attempt) => {
+      const n = net.current;
+      n.name = name;
+      n.code = code;
+      n.stopped = false;
+      setStatus('working');
+      setError(null);
+      let why: OnlineErrorKey | null = null;
+      try {
+        const res = await fetch(`/api/volley/rooms/${code}`, { cache: 'no-store' });
+        if (res.status === 404) why = 'room_not_found';
+        else if (res.status === 503) why = 'unavailable';
+        else if (!res.ok) why = 'network';
+        else {
+          const info = (await res.json()) as { players: number };
+          if (info.players >= 2 && !readToken(code)) why = 'room_full';
+        }
+      } catch {
+        why = 'network';
+      }
+      if (attempt !== n.attempt) return; // left, or started over, meanwhile
+      if (why) reset(why);
+      else connect(code);
+    },
+    [connect, reset],
+  );
+
+  const create = useCallback(
+    async (name: string) => {
+      const attempt = ++net.current.attempt;
+      setStatus('working');
+      setError(null);
+      let code: string | null = null;
+      let why: OnlineErrorKey | null = null;
+      try {
+        const res = await fetch('/api/volley/rooms', { method: 'POST' });
+        if (res.status === 429) why = 'rate_limited';
+        else if (res.status === 503) why = 'unavailable';
+        else if (!res.ok) why = 'network';
+        else code = ((await res.json()) as { code: string }).code;
+      } catch {
+        why = 'network';
+      }
+      if (attempt !== net.current.attempt) return;
+      if (code) await enter(code, name, attempt);
+      else reset(why ?? 'network');
+    },
+    [enter, reset],
+  );
+
+  const setReady = useCallback((ready: boolean) => send({ t: 'ready', ready }), [send]);
+
+  const leave = useCallback(() => {
+    send({ t: 'leave' });
+    const code = net.current.code;
+    if (code) writeToken(code, null);
+    reset(null);
+  }, [reset, send]);
+
+  const press = useCallback((k: GameKey) => void (net.current.keys[k] = true), []);
+  const release = useCallback((k: GameKey) => void (net.current.keys[k] = false), []);
+
+  // ---- ping every couple of seconds (round trip for the clock + shown to both players)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = net.current;
+      send({ t: 'ping', c: performance.now(), ...(n.clock.rtt ? { rtt: Math.round(n.clock.rtt) } : {}) });
+    }, NET.PING_EVERY_MS);
+    return () => clearInterval(id);
+  }, [send]);
+
+  // ---- frame loop: predict, send key changes, draw
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !stage || !ctx) return;
+    const palette = readPalette();
+    const lobby = createGame('online'); // what's drawn before the first match
+    const view: View = { w: 1, h: 1, dpr: 1 };
+    const resize = () => {
+      const r = stage.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(r.width * dpr));
+      canvas.height = Math.max(1, Math.round(r.height * dpr));
+      canvas.style.width = `${r.width}px`;
+      canvas.style.height = `${r.height}px`;
+      Object.assign(view, { w: r.width, h: r.height, dpr });
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(stage);
+    resize();
+
+    let raf = 0;
+    let last = performance.now();
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min((now - last) / 1000, 0.25);
+      last = now;
+      const n = net.current;
+      const p = n.predictor;
+      if (p && n.room?.phase === 'playing' && n.clock.synced) {
+        // Keys are pressed on screen directions; the right-hand player's court is mirrored.
+        const screen = packInput(n.keys);
+        const bits = n.side === 1 ? mirrorBits(screen) : screen;
+        const tick = p.advanceTo(n.clock.target(now), bits);
+        if (tick !== null) send({ t: 'input', tick, bits });
+      }
+      p?.smooth(dt);
+      const g = p?.ready ? p.view() : lobby;
+      const shown = n.side === 1 ? mirrorState(g) : g;
+      const them = n.side === 1 ? 0 : 1;
+      const rival = n.room?.seats[them]?.name ?? n.room?.result?.names[them] ?? '—';
+      renderGame(ctx, shown, view, palette, labels.current.strings, [labels.current.youLabel, rival.toUpperCase()]);
+    };
+    raf = requestAnimationFrame(frame);
+
+    const panelActive = () => {
+      if (document.fullscreenElement) return true;
+      const r = panelRef.current?.getBoundingClientRect();
+      return !!r && r.bottom >= 80 && r.top <= window.innerHeight - 80;
+    };
+    const onKey = (down: boolean) => (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = KEYMAP[e.key];
+      if (!k) return;
+      if (!down) net.current.keys[k] = false; // a release always counts, or the key would stay "held" into the next match
+      if (!panelActive()) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, button, [contenteditable="true"]')) return;
+      // Lobby, pause, result: keys belong to the page. From the countdown on they're the player's (no page scroll).
+      const phase = net.current.room?.phase;
+      if (phase !== 'playing' && phase !== 'countdown') return;
+      e.preventDefault();
+      net.current.keys[k] = down;
+    };
+    const onKeyDown = onKey(true);
+    const onKeyUp = onKey(false);
+    const onBlur = () => Object.assign(net.current.keys, { left: false, right: false, jump: false });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [canvasRef, stageRef, panelRef, send]);
+
+  // Leaving the online tab (or closing the panel) leaves the room.
+  useEffect(() => {
+    const n = net.current;
+    return () => {
+      if (n.ws?.readyState === WebSocket.OPEN) n.ws.send(JSON.stringify({ t: 'leave' } satisfies ClientMessage));
+      n.stopped = true;
+      n.attempt++;
+      if (n.retryTimer) clearTimeout(n.retryTimer);
+      n.ws?.close(1000);
+      n.ws = null;
+      showRoomInUrl(null);
+    };
+  }, []);
+
+  return { status, room, side, error, ping, deadline, create, enter, setReady, leave, press, release };
+}

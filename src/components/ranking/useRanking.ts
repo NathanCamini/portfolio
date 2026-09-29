@@ -32,7 +32,7 @@ export function rememberedName(): string {
   }
 }
 
-function rememberName(name: string) {
+export function rememberName(name: string) {
   try {
     localStorage.setItem(NAME_KEY, name);
   } catch {

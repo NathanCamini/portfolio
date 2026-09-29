@@ -11,4 +11,6 @@ export const gameConfig = {
   phaseWinScore: 7,
   /** Endless ends when the CPU reaches this; the player has no limit. */
   endlessCpuScore: 7,
+  /** Online 1v1 (docs/volei-online.md): first to this many points wins. */
+  onlineWinScore: 7,
 };

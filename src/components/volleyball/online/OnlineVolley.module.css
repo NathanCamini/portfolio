@@ -1,0 +1,391 @@
+/* The online tab's cards sit over the court like the leaderboard does (RankingOverlay.module.css). */
+
+.canvas {
+  cursor: default;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  overflow-y: auto;
+  padding: 16px;
+  background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: auto;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  margin: auto; /* centres, and still scrolls from the top when taller than the stage */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.start header {
+  margin-bottom: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.sub,
+.note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-400);
+}
+
+.note {
+  min-height: 1.4em; /* reserved, so the buttons don't jump when a line appears */
+  text-align: center;
+}
+
+.error {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: #f0a3a6;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--color-neutral-300);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 16px; /* ≥16px: no zoom-on-focus in iOS Safari */
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  transition: border-color 0.2s;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.input[aria-invalid='true'] {
+  border-color: #f0787d;
+  box-shadow: 0 0 0 1px #f0787d;
+}
+
+.input:disabled {
+  opacity: 0.6;
+}
+
+.codeInput {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.link {
+  font-size: 14px;
+  color: var(--color-neutral-300);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > :global(.btn) {
+  flex: none;
+}
+
+/* "── or join with a code ──" */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-neutral-500);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions > :global(.btn) {
+  flex: 1 1 auto;
+}
+
+/* ---- lobby ---- */
+.roomHead,
+.result {
+  text-align: center;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.code {
+  margin: 2px 0 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  line-height: 1.15;
+  /* the trailing letter-spacing would push the code off-centre */
+  margin-right: -0.25em;
+}
+
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.seats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.seats li.mine {
+  box-shadow: inset 0 0 0 1px var(--color-accent-600);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-neutral-600);
+}
+
+.dot.online {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.you {
+  color: var(--color-neutral-400);
+}
+
+.empty {
+  color: var(--color-neutral-500);
+  font-style: italic;
+}
+
+.tags {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ready {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--color-accent-100);
+  background: var(--color-accent-800);
+  box-shadow: inset 0 0 0 1px var(--color-accent-600);
+}
+
+.off {
+  color: #f0a3a6;
+}
+
+.ping {
+  color: var(--color-neutral-500);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- paused / reconnecting ---- */
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 15px;
+  text-align: center;
+}
+
+.spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.card > .sub {
+  text-align: center;
+}
+
+/* ---- result ---- */
+.headline {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.headline.win {
+  color: var(--color-accent-300);
+}
+
+.scoreline {
+  margin: 2px 0 4px;
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.times {
+  font-size: 22px;
+  color: var(--color-neutral-500);
+}
+
+/* ---- countdown and the in-match line ---- */
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* a bit below the middle: clear of the court's "point" callout at ~37% height */
+  padding-top: 14%;
+  pointer-events: none;
+  /* dims whatever the frozen court shows (a "point" callout) under the number */
+  background: color-mix(in srgb, var(--color-bg) 62%, transparent);
+}
+
+.countLabel {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-200);
+}
+
+.countNum {
+  font-size: clamp(56px, 12vw, 120px);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-accent-300);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  animation: pop 0.9s ease-out both;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.hud {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 1;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-neutral-300);
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 10px;
+  }
+  .card {
+    padding: 16px;
+  }
+  .code {
+    font-size: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countNum {
+    animation: none;
+  }
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}

@@ -2,8 +2,9 @@
 
 Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
 biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
-pelo scroll, um **mini-jogo de vôlei de praia** (campanha com chefe + modo endless) e um **Peek Trainer** no
-estilo Rainbow Six Siege — os dois com um **ranking global compartilhado** (Cloudflare Workers + D1).
+pelo scroll, um **mini-jogo de vôlei de praia** (campanha com chefe, modo endless e **online 1×1 em tempo real**) e
+um **Peek Trainer** no estilo Rainbow Six Siege — os dois com um **ranking global compartilhado** (Cloudflare
+Workers + D1).
 
 ```bash
 npm install
@@ -15,8 +16,9 @@ npm run db:migrate # aplica migrations/ no D1 de produção (só para mudanças 
 ```
 
 Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção. A única parte
-dinâmica é um Worker pequeno em `worker/` (API do currículo e ranking dos mini-jogos). Com `npm run dev` os jogos
-funcionam normalmente e o ranking aparece como indisponível (não há Worker); use `npm run preview` para testá-lo.
+dinâmica é um Worker pequeno em `worker/` (API do currículo, ranking dos mini-jogos e salas do vôlei online). Com
+`npm run dev` os jogos funcionam normalmente e o ranking e o online aparecem como indisponíveis (não há Worker); use
+`npm run preview` para testá-los.
 
 ## Deploy na Cloudflare
 
@@ -83,6 +85,16 @@ variável de build `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (`src/components/Cloudfl
 Não ative ao mesmo tempo a "instalação automática" do Web Analytics para o mesmo domínio, senão as visitas contam
 em dobro.
 
+### Vôlei online (1×1)
+
+Salas por link: uma pessoa cria a sala, manda o link (`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
+Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
+navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 30 estados por segundo que o
+servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). O deploy cria
+o Durable Object sozinho, pela migration do `wrangler.jsonc`; previews não têm salas e mostram o online como
+indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de latência), limites, custos e testes:
+**[docs/volei-online.md](docs/volei-online.md)**.
+
 ### Idioma
 
 - `/` escolhe o idioma pela **configuração do sistema** do visitante (`navigator.languages`, na ordem de
@@ -103,6 +115,7 @@ em dobro.
 | `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
 | `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                 |
 | Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP              |
+| Cloudflare Durable Objects                   | Salas do vôlei online: WebSocket com hibernação, física autoritativa         |
 | `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers         |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
@@ -124,7 +137,8 @@ src/
 ├─ config/game.ts            # pontos por fase e limite da CPU no endless (lido também pelo Worker)
 ├─ i18n/                     # config, detect (idioma do sistema), dicionários pt/en, I18nProvider
 ├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts
-│  └─ ranking/               # ranking compartilhado (navegador + Worker): jogos, regras por jogo, nomes, contrato
+│  ├─ ranking/               # ranking compartilhado (navegador + Worker): jogos, regras por jogo, nomes, contrato
+│  └─ volley-online/         # vôlei online (navegador + Worker): protocolo, partida, sala, previsão — testado
 ├─ hooks/                    # useTypewriter, useMediaQuery
 └─ components/
    ├─ motion/                # Reveal (whileInView), LocaleTransition, easing
@@ -143,12 +157,15 @@ src/
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
       ├─ useVolleyballGame.ts# loop de passo fixo, input, resize, apito inicial/final
-      └─ VolleyballGame.tsx  # painel: toolbar, tela cheia, controles touch
+      ├─ online/             # aba online: conexão, reconexão, previsão, lobby e resultado
+      └─ VolleyballGame.tsx  # painel: toolbar com as abas, tela cheia, controles touch
 worker/
-├─ index.ts                  # /api/ranking/:jogo (rotas, validação, rate limit); o resto de /api → resume-api.ts
+├─ index.ts                  # /api/ranking/:jogo (rotas, validação, rate limit), /api/volley → volley.ts; o resto → resume-api.ts
 ├─ store.ts                  # SQL do D1 (ranking por jogador, ticket de uso único)
-└─ test/                     # testes da API contra SQLite real (node:sqlite)
+├─ volley.ts, volley-room.ts # /api/volley/rooms e o Durable Object de cada sala
+└─ test/                     # testes da API contra SQLite real (node:sqlite) + e2e do online contra wrangler dev
 migrations/                  # schema do D1
+docs/volei-online.md         # o vôlei online em detalhe
 ```
 
 ## Decisões de engenharia
