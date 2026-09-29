@@ -11,14 +11,19 @@ import { checkNickname } from '../src/lib/ranking/nickname';
 import { RULES, type GameResults, type GameRules } from '../src/lib/ranking/rules';
 import { handleApiRequest } from '../src/lib/resume-api';
 import * as store from './store';
+import { handleVolley, type VolleyEnv } from './volley';
+
+/** The online volleyball room (docs/volei-online.md): bound as VOLLEY_ROOMS in wrangler.jsonc. */
+export { VolleyRoom } from './volley-room';
 
 /**
  * Cloudflare Worker. `run_worker_first: ["/api/*"]` in wrangler.jsonc routes
  * only the API here; every other path is served directly from the static assets.
  *
  * `/api/ranking/:game` is the global ranking shared by the mini-games
- * (`volley` Endless, `peek` trainer); the rest of `/api` (GET /api/nathan,
- * the résumé) is src/lib/resume-api.ts.
+ * (`volley` Endless, `peek` trainer); `/api/volley/rooms` is the online 1v1
+ * (worker/volley.ts + the VolleyRoom Durable Object); the rest of `/api`
+ * (GET /api/nathan, the résumé) is src/lib/resume-api.ts.
  *
  *   GET  /api/ranking/:game          → the game's top 10 (each player's best)
  *   POST /api/ranking/:game/matches  → a single-use ticket, issued when a run kicks off
@@ -32,7 +37,7 @@ import * as store from './store';
  * could still post a plausible result.
  */
 
-export interface Env {
+export interface Env extends VolleyEnv {
   /** Absent on preview deployments (see wrangler.jsonc): the API answers 503 and the games play offline. */
   DB?: D1Database;
   KICKOFF_LIMIT?: RateLimit;
@@ -69,6 +74,7 @@ function json(body: unknown, status = 200): Response {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/volley/')) return handleVolley(request, url, env);
     if (!url.pathname.startsWith('/api/ranking/')) return handleApiRequest(request);
     try {
       return await route(request, url, env);

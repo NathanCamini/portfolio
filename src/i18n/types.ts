@@ -1,4 +1,5 @@
 import type { GameId } from '@/lib/ranking/contract';
+import type { ErrorCode } from '@/lib/volley-online/protocol';
 
 /**
  * Shape of a translation dictionary. Every locale file must satisfy this
@@ -80,6 +81,50 @@ export interface GameStrings {
   /** `{n}` = points scored before the CPU reached its limit. */
   endlessOver: string;
   again: string;
+  /** Online match: the opponent scored. `{name}` = the opponent. */
+  onlinePoint: string;
+}
+
+/** What can go wrong online, as the page explains it (docs/volei-online.md). */
+export type OnlineErrorKey = ErrorCode | 'network' | 'unavailable';
+
+/** The online 1v1 lobby around the canvas (components/volleyball/online). */
+export interface OnlineStrings {
+  title: string;
+  intro: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  create: string;
+  or: string;
+  codeLabel: string;
+  join: string;
+  working: string;
+  room: string;
+  share: string;
+  copy: string;
+  copied: string;
+  you: string;
+  waitingSeat: string;
+  offline: string;
+  readyTag: string;
+  ready: string;
+  unready: string;
+  /** `{name}` = the opponent. */
+  waitingOther: string;
+  startsIn: string;
+  resumesIn: string;
+  paused: string;
+  /** `{n}` = seconds left. */
+  pausedHint: string;
+  reconnecting: string;
+  won: string;
+  lost: string;
+  byForfeit: string;
+  series: string;
+  again: string;
+  leave: string;
+  ping: string;
+  errors: Record<OnlineErrorKey, string>;
 }
 
 /** Global ranking, shared by every game: the name form after a run and the top 10 boards. */
@@ -212,8 +257,9 @@ export interface Dictionary {
     fab: string;
     teaserAlt: string;
     /** Toolbar switch between the campaign and Endless. */
-    mode: { label: string; campaign: string; endless: string };
+    mode: { label: string; campaign: string; endless: string; online: string };
     game: GameStrings;
+    online: OnlineStrings;
   };
   games: {
     label: string;

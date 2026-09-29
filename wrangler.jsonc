@@ -8,7 +8,8 @@
   "name": "portfolio",
   "compatibility_date": "2026-09-01",
   // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts);
-  // /api/ranking/:game — the mini-games' global ranking (worker/store.ts, D1).
+  // /api/ranking/:game — the mini-games' global ranking (worker/store.ts, D1);
+  // /api/volley/rooms — online 1v1 volleyball (worker/volley.ts, Durable Objects).
   "main": "worker/index.ts",
   "assets": {
     "directory": "./out",
@@ -34,13 +35,21 @@
     },
   ],
   // Per-IP limits, shared by every game (a volley run lasts 15 s+, a trainer round 30 s: 6 kickoffs a minute is plenty).
+  // ROOM_LIMIT: online rooms created per IP (docs/volei-online.md).
   "ratelimits": [
     { "name": "KICKOFF_LIMIT", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
     { "name": "SUBMIT_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "ROOM_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
   ],
+  // Online 1v1 volleyball: one Durable Object per room runs the match (worker/volley-room.ts).
+  "durable_objects": {
+    "bindings": [{ "name": "VOLLEY_ROOMS", "class_name": "VolleyRoom" }],
+  },
+  // SQLite-backed Durable Objects are the kind available on the Workers Free plan.
+  "migrations": [{ "tag": "v1-volley-rooms", "new_sqlite_classes": ["VolleyRoom"] }],
   // Required by `wrangler preview`, which Cloudflare's Git integration runs for
   // non-production branches. Bindings aren't inherited here, so previews have no
-  // database: the game works and the ranking shows as unavailable, which keeps
-  // test runs out of the real leaderboard.
+  // database and no online rooms: the games work, the ranking and online mode
+  // show as unavailable, which keeps test runs out of the real leaderboard.
   "previews": {},
 }

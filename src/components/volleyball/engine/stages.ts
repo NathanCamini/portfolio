@@ -10,17 +10,19 @@ import { CPU, type CpuProfile } from './constants';
  */
 export type StageId = 'easy' | 'boss' | 'endless';
 export type Mode = 'campaign' | 'endless';
+/** Every stage the engine knows, the online match included (docs/volei-online.md). */
+export type StageKey = StageId | 'online';
 
 export interface Stage {
-  id: StageId;
-  mode: Mode;
+  id: StageKey;
+  mode: Mode | 'online';
   cpu: CpuProfile;
   /** Points that end the match, for [player, cpu]. Infinity: no limit. */
   limits: [number, number];
   theme: 'beach' | 'bug';
 }
 
-export const STAGES: Record<StageId, Stage> = {
+export const STAGES: Record<StageKey, Stage> = {
   easy: {
     id: 'easy',
     mode: 'campaign',
@@ -42,9 +44,20 @@ export const STAGES: Record<StageId, Stage> = {
     limits: [Infinity, gameConfig.endlessCpuScore],
     theme: 'beach',
   },
+  /**
+   * Two people, one per side (docs/volei-online.md). Both bodies take input,
+   * so `cpu` is only used for the right-hand player's size (the original one).
+   */
+  online: {
+    id: 'online',
+    mode: 'online',
+    cpu: CPU.normal,
+    limits: [gameConfig.onlineWinScore, gameConfig.onlineWinScore],
+    theme: 'beach',
+  },
 };
 
 /** Campaign progression: only a win moves on; the boss is the last phase (a win there is a rematch). */
-export function nextStage(id: StageId, playerWon: boolean): StageId {
+export function nextStage(id: StageKey, playerWon: boolean): StageKey {
   return id === 'easy' && playerWon ? 'boss' : id;
 }

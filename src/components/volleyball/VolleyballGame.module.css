@@ -113,6 +113,23 @@
   font-size: 13px;
 }
 
+/* Phones: the mode switch gets its own row (three tabs), the buttons go under it on the right. */
+@media (max-width: 640px) {
+  .actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .modes {
+    flex: 1 1 100%;
+  }
+  .modes > :global(.seg-opt) {
+    flex: 1 1 0;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 /* The boss fight: the whole panel glows red. */
 .panel.boss {
   box-shadow:

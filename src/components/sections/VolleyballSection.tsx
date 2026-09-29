@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Magnetic } from '@/components/fun/Magnetic';
 import { EASE_OUT_SOFT } from '@/components/motion/easing';
 import { Reveal } from '@/components/motion/Reveal';
+import { roomFromHash } from '@/components/volleyball/online/link';
 import { VolleyballGame } from '@/components/volleyball/VolleyballGame';
 import { VolleyTeaser } from '@/components/volleyball/VolleyTeaser';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -20,11 +21,13 @@ const PANEL_ID = 'volleyball-game';
  * poster, a pulsing Play button and a floating shortcut elsewhere on the page
  * (VolleyFab). Opening expands the same game panel as before (height 0 → auto,
  * 650 ms) and scrolls it into view. The game is only mounted while open.
+ * A room link (`#volei-CODE`, docs/volei-online.md) opens it on the online tab.
  */
 export function VolleyballSection() {
   const { t } = useI18n();
   const vb = t.volleyball;
   const [open, setOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const reduce = useReducedMotion();
 
@@ -47,6 +50,19 @@ export function VolleyballSection() {
     const onOpen = () => openRef.current();
     window.addEventListener(OPEN_VOLLEYBALL, onOpen);
     return () => window.removeEventListener(OPEN_VOLLEYBALL, onOpen);
+  }, []);
+
+  // A room link, on arrival or pasted into this tab's address bar: the online tab, on that room.
+  useEffect(() => {
+    const onHash = () => {
+      const code = roomFromHash(location.hash);
+      if (!code) return;
+      setJoinCode(code);
+      openRef.current();
+    };
+    onHash();
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
   const close = () => {
@@ -105,7 +121,8 @@ export function VolleyballSection() {
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.65, ease: EASE_OUT_SOFT }}
           >
-            <VolleyballGame id={PANEL_ID} onClose={close} />
+            {/* A new room link remounts the panel on it. */}
+            <VolleyballGame key={joinCode ?? 'local'} id={PANEL_ID} onClose={close} joinCode={joinCode} />
           </motion.div>
         )}
       </AnimatePresence>
