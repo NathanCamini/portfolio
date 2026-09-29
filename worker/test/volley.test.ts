@@ -104,3 +104,32 @@ describe('GET /api/volley/rooms/:code (WebSocket)', () => {
     expect((await call({ VOLLEY_ROOMS: ns }, 'DELETE', '/api/volley/rooms/ABC23', ws)).status).toBe(404);
   });
 });
+
+describe('GET /api/volley/queue (quick match)', () => {
+  const ws = { Upgrade: 'websocket', Origin: ORIGIN };
+
+  it('forwards the upgrade to the one global queue', async () => {
+    const rooms = fakeRooms();
+    const queue = fakeRooms();
+    const res = await call({ VOLLEY_ROOMS: rooms.ns, VOLLEY_QUEUE: queue.ns }, 'GET', '/api/volley/queue', ws);
+    expect(await res.text()).toBe('forwarded');
+    expect(queue.calls).toEqual([{ name: 'global', url: `${ORIGIN}/api/volley/queue`, method: 'GET' }]);
+  });
+
+  it('answers the pre-check without touching the queue', async () => {
+    const queue = fakeRooms();
+    const res = await call({ VOLLEY_ROOMS: fakeRooms().ns, VOLLEY_QUEUE: queue.ns }, 'GET', '/api/volley/queue');
+    expect(res.status).toBe(204);
+    expect(queue.calls).toHaveLength(0);
+  });
+
+  it('refuses other sites, rate-limited IPs, missing bindings and other methods', async () => {
+    const env = { VOLLEY_ROOMS: fakeRooms().ns, VOLLEY_QUEUE: fakeRooms().ns };
+    expect((await call(env, 'GET', '/api/volley/queue', { ...ws, Origin: 'https://evil.test' })).status).toBe(403);
+    expect((await call({ ...env, QUEUE_LIMIT: limiter(false) }, 'GET', '/api/volley/queue')).status).toBe(429);
+    expect((await call({ ...env, QUEUE_LIMIT: limiter(false) }, 'GET', '/api/volley/queue', ws)).status).toBe(429);
+    expect((await call({ VOLLEY_ROOMS: env.VOLLEY_ROOMS }, 'GET', '/api/volley/queue')).status).toBe(503);
+    expect((await call({}, 'GET', '/api/volley/queue', ws)).status).toBe(503);
+    expect((await call(env, 'POST', '/api/volley/queue', ws)).status).toBe(404);
+  });
+});

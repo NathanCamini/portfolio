@@ -87,11 +87,12 @@ em dobro.
 
 ### Vôlei online (1×1)
 
-Salas por link: uma pessoa cria a sala, manda o link (`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
+**Partida rápida** (uma fila que junta dois desconhecidos) ou salas por link: uma pessoa cria a sala, manda o link
+(`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
 Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
 navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 30 estados por segundo que o
 servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). O deploy cria
-o Durable Object sozinho, pela migration do `wrangler.jsonc`; previews não têm salas e mostram o online como
+os Durable Objects (salas e fila) sozinho, pelas migrations do `wrangler.jsonc`; previews não têm salas e mostram o online como
 indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de latência), limites, custos e testes:
 **[docs/volei-online.md](docs/volei-online.md)**.
 
@@ -162,7 +163,7 @@ src/
 worker/
 ├─ index.ts                  # /api/ranking/:jogo (rotas, validação, rate limit), /api/volley → volley.ts; o resto → resume-api.ts
 ├─ store.ts                  # SQL do D1 (ranking por jogador, ticket de uso único)
-├─ volley.ts, volley-room.ts # /api/volley/rooms e o Durable Object de cada sala
+├─ volley*.ts                # /api/volley: o Durable Object de cada sala e o da fila da partida rápida
 └─ test/                     # testes da API contra SQLite real (node:sqlite) + e2e do online contra wrangler dev
 migrations/                  # schema do D1
 docs/volei-online.md         # o vôlei online em detalhe

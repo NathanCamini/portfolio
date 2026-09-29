@@ -40,13 +40,23 @@
     { "name": "KICKOFF_LIMIT", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
     { "name": "SUBMIT_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
     { "name": "ROOM_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
+    // QUEUE_LIMIT: quick-match searches per IP (the pre-check and the socket both count).
+    { "name": "QUEUE_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } },
   ],
   // Online 1v1 volleyball: one Durable Object per room runs the match (worker/volley-room.ts).
   "durable_objects": {
-    "bindings": [{ "name": "VOLLEY_ROOMS", "class_name": "VolleyRoom" }],
+    "bindings": [
+      { "name": "VOLLEY_ROOMS", "class_name": "VolleyRoom" },
+      // The quick-match queue (worker/volley-queue.ts): one instance for everyone.
+      { "name": "VOLLEY_QUEUE", "class_name": "VolleyQueue" },
+    ],
   },
   // SQLite-backed Durable Objects are the kind available on the Workers Free plan.
-  "migrations": [{ "tag": "v1-volley-rooms", "new_sqlite_classes": ["VolleyRoom"] }],
+  // Published migrations are never edited: each new class gets its own tag.
+  "migrations": [
+    { "tag": "v1-volley-rooms", "new_sqlite_classes": ["VolleyRoom"] },
+    { "tag": "v2-volley-queue", "new_sqlite_classes": ["VolleyQueue"] },
+  ],
   // Required by `wrangler preview`, which Cloudflare's Git integration runs for
   // non-production branches. Bindings aren't inherited here, so previews have no
   // database and no online rooms: the games work, the ranking and online mode

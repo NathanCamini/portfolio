@@ -165,7 +165,9 @@ export type ErrorCode =
   | 'room_not_found'
   | 'rate_limited'
   | 'replaced'
-  | 'timeout';
+  | 'timeout'
+  /** Quick match: the server couldn't open a room for the pair. */
+  | 'unavailable';
 
 export type ClientMessage =
   | { t: 'hello'; v: number; name: string; token?: string }

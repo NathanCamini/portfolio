@@ -86,7 +86,7 @@ export interface GameStrings {
 }
 
 /** What can go wrong online, as the page explains it (docs/volei-online.md). */
-export type OnlineErrorKey = ErrorCode | 'network' | 'unavailable';
+export type OnlineErrorKey = ErrorCode | 'network';
 
 /** The online 1v1 lobby around the canvas (components/volleyball/online). */
 export interface OnlineStrings {
@@ -95,6 +95,13 @@ export interface OnlineStrings {
   nameLabel: string;
   namePlaceholder: string;
   create: string;
+  /** Quick match: a random opponent from the queue. */
+  quick: string;
+  searching: string;
+  searchingHint: string;
+  cancel: string;
+  /** The quick-match lobby, until the opponent shows up. */
+  found: string;
   or: string;
   codeLabel: string;
   join: string;

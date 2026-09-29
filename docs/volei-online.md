@@ -1,8 +1,11 @@
-# Vôlei online 1×1: fase 1
+# Vôlei online 1×1
 
-A primeira fase do vôlei online: **salas por link, uma pessoa contra outra, em tempo real**. Um servidor autoritativo
-(um Durable Object da Cloudflare por sala) roda a física, e cada navegador **prevê** a partida para responder ao
-teclado na hora. Este documento explica o que foi feito, por quê, e como testar, rodar e publicar.
+Vôlei **uma pessoa contra outra, em tempo real**. Um servidor autoritativo (um Durable Object da Cloudflare por sala)
+roda a física, e cada navegador **prevê** a partida para responder ao teclado na hora. Este documento explica o que
+foi feito, por quê, e como testar, rodar e publicar.
+
+- **Fase 1:** salas por link (criar, mandar o link, jogar), reconexão, revanche.
+- **Fase 2:** [partida rápida](#partida-rápida), uma fila que junta dois desconhecidos numa sala nova.
 
 - [Como se joga](#como-se-joga)
 - [Arquitetura](#arquitetura)
@@ -10,6 +13,7 @@ teclado na hora. Este documento explica o que foi feito, por quê, e como testar
 - [API HTTP](#api-http)
 - [Protocolo WebSocket](#protocolo-websocket)
 - [Ciclo de vida da sala](#ciclo-de-vida-da-sala)
+- [Partida rápida](#partida-rápida)
 - [Servidor autoritativo](#servidor-autoritativo)
 - [Netcode no navegador](#netcode-no-navegador)
 - [Reconexão](#reconexão)
@@ -22,6 +26,12 @@ teclado na hora. Este documento explica o que foi feito, por quê, e como testar
 - [Próximas fases](#próximas-fases)
 
 ## Como se joga
+
+**Partida rápida:** na aba **Online · 1×1**, digite um apelido e clique em **Partida rápida** (ou aperte Enter). A
+tela mostra "Procurando adversário…" com o tempo de espera; assim que outra pessoa entra na fila, as duas vão para uma
+sala nova, já prontas, e a contagem começa.
+
+**Com um amigo:**
 
 1. No painel do vôlei, aba **Online · 1×1**: digite um apelido e clique em **Criar sala**.
 2. A sala mostra um código de 5 letras (`K7MPQ`) e o link `https://site/#volei-K7MPQ`, com um botão de copiar.
@@ -69,18 +79,20 @@ src/lib/volley-online/            # compartilhado: roda no Worker e no navegador
 ├─ protocol.ts                    # versão, constantes de rede (NET), códigos de sala, teclas, snapshots, mensagens
 ├─ match.ts                       # OnlineMatch: a partida autoritativa (120 Hz) + InputTimeline das teclas
 ├─ room.ts                        # RoomCore: lobby, prontos, contagem, pausa, W.O., revanche, persistência
+├─ queue.ts                       # MatchQueue: a fila da partida rápida (quem espera, pareamento)
 ├─ predictor.ts                   # Predictor (previsão + reconciliação + suavização), TickClock, mirrorState
 └─ testing.ts                     # bots e gerador pseudoaleatório para os testes
 worker/
-├─ volley.ts                      # rotas HTTP /api/volley/rooms
+├─ volley.ts                      # rotas HTTP /api/volley/rooms e /api/volley/queue
 ├─ volley-room.ts                 # o Durable Object VolleyRoom (adaptador de RoomCore)
+├─ volley-queue.ts                # o Durable Object VolleyQueue (adaptador de MatchQueue)
 └─ test/volley.test.ts            # rotas; test/online.e2e.test.ts: partida real contra `wrangler dev`
 src/components/volleyball/
 ├─ VolleyballGame.tsx             # painel: abas Campanha / Endless / Online (cada aba monta só o seu jogo)
 ├─ TouchPad.tsx                   # botões na tela, usados pelo jogo local e pelo online
 └─ online/
    ├─ useOnlineVolley.ts          # conexão, reconexão, loop de previsão e desenho
-   ├─ OnlineVolley.tsx (+ .css)   # telas: início, lobby, contagem, pausa, reconectando, resultado
+   ├─ OnlineVolley.tsx (+ .css)   # telas: início, procurando, lobby, contagem, pausa, reconectando, resultado
    └─ link.ts                     # link da sala (#volei-CÓDIGO)
 ```
 
@@ -99,6 +111,8 @@ O modo contra a CPU continua idêntico, e os testes de dificuldade do motor segu
 | `POST /api/volley/rooms`      | `201 { "code": "K7MPQ" }`: sala nova. `403` de outro site, `429` acima do limite, `503` sem DO.    |
 | `GET /api/volley/rooms/:code` | Com `Upgrade: websocket`: `101`, o WebSocket da sala. `Origin` precisa ser o próprio site (`403`). |
 | `GET /api/volley/rooms/:code` | Sem upgrade: `200 { code, phase, players }` ou `404`. A página checa isso antes de abrir o socket. |
+| `GET /api/volley/queue`       | Com `Upgrade: websocket`: `101`, o WebSocket da fila. `Origin` obrigatório (`403`).                |
+| `GET /api/volley/queue`       | Sem upgrade: `204`, ou `429` / `503`. O pré-teste da partida rápida.                               |
 
 O pré-teste por HTTP existe porque um WebSocket recusado não diz o motivo ao navegador. Com ele, a página mostra
 "sala não encontrada", "sala cheia" ou "online indisponível".
@@ -159,6 +173,31 @@ navegador usa as do adversário para prevê-lo). Tem cerca de 200 bytes.
 
 O que é **persistido** no armazenamento do objeto: código, cadeiras (nome, token, pronto), placar da sala e último
 resultado. A partida em si fica só na memória (é refeita 120 vezes por segundo, gravar não faria sentido).
+
+## Partida rápida
+
+```
+ Navegador A ──WebSocket──┐                                   ┌──▶ sala nova "K7MPQ" ◀── A e B entram
+                          ├──▶ Durable Object "fila" (global) ─┤      (a mesma sala da fase 1)
+ Navegador B ──WebSocket──┘     2 na fila → abre uma sala      └──▶ { t: 'matched', code } para os dois
+```
+
+- **Uma fila para todo mundo:** um Durable Object só (`idFromName('global')`), classe `VolleyQueue`. Para o volume
+  de um portfólio, um objeto dá conta com folga (ele só troca poucas mensagens por pessoa).
+- **Protocolo:** o navegador abre `GET /api/volley/queue` (WebSocket) e manda `join { v, name }`. O servidor responde
+  `queued`, e depois `matched { code }`, fechando o socket em seguida; ou `error { code }` (`invalid_name`,
+  `bad_version`, `bad_message`, `rate_limited`, `timeout`, `unavailable`).
+- **Pareamento:** por ordem de chegada. Quando há dois na fila, o objeto tira os dois **antes** de abrir a sala
+  (`openRoom`, a mesma função do `POST /rooms`), então um `join` que chega enquanto a sala abre não é pareado de
+  novo com eles. Se a sala não abrir, os dois recebem `unavailable`.
+- **Depois do pareamento é uma sala normal**, com tudo da fase 1 (reconexão, pausa, W.O., revanche). O navegador:
+  - entra na sala e já manda `ready`, então a contagem começa assim que os dois chegam;
+  - não mostra o link de compartilhar (é uma sala de desconhecidos) e troca o título por "Adversário encontrado!";
+  - **se o adversário não aparecer em 10 s** (fechou a aba no meio do pareamento), sai da sala e volta para a fila
+    sozinho. O mesmo vale se ele sair antes da partida começar.
+- **Hibernação:** quem espera sozinho não custa nada. Cada socket guarda no _attachment_ se está na fila e desde
+  quando; um objeto que acorda remonta a fila na mesma ordem.
+- **Cancelar** fecha o socket da fila, e a pessoa sai da fila na hora.
 
 ## Servidor autoritativo
 
@@ -270,6 +309,8 @@ do saque depende de onde a bola do **outro** caiu, e essa informação chega tar
 | O quê                 | Limite / regra                                                                 |
 | --------------------- | ------------------------------------------------------------------------------ |
 | Criar sala            | 10 por minuto por IP (`ROOM_LIMIT`), e só a partir do próprio site (`Origin`)  |
+| Partida rápida        | 20 por minuto por IP (`QUEUE_LIMIT`, pré-teste e socket contam)                |
+| Mensagens na fila     | Só o `join`; mais de 4 mensagens num socket da fila, `rate_limited`            |
 | Abrir o WebSocket     | `Origin` obrigatório e igual ao site: outra página não abre socket em seu nome |
 | Tamanho de mensagem   | 512 bytes (a maior legítima, o `hello`, tem ~100)                              |
 | Mensagens por conexão | Balde de fichas: 90/s, rajada de 180. Acima disso, `rate_limited` e desconexão |
@@ -318,12 +359,19 @@ npx vitest run src/lib/volley-online worker    # só o online
   - pausa e volta com token (estado congelado idêntico);
   - W.O. por tempo e por saída, aba duplicada;
   - hibernação (sala remontada do armazenamento).
+- `queue.test.ts`, a fila:
+  - pareamento por ordem de chegada, o terceiro espera o quarto;
+  - quem desiste sai da fila;
+  - um `join` que chega enquanto a sala abre não é pareado duas vezes;
+  - sala que não abre, apelido ruim, versão antiga, lixo, excesso de mensagens, socket mudo;
+  - hibernação (fila remontada dos sockets, na ordem).
 - `worker/test/volley.test.ts`: as rotas (criação, colisão de código, `403`/`429`/`503`, encaminhamento do upgrade,
-  pré-teste).
+  pré-teste), da sala e da fila.
 - `link.test.ts`: o link da sala e a leitura do `#volei-CÓDIGO`.
 - `worker/test/online.e2e.test.ts`: **partida real** contra o `wrangler dev`, com o Durable Object de verdade e
   WebSockets de verdade. Dois bots usam o mesmo `Predictor` e o mesmo `TickClock` do navegador, jogam até 7, um
-  deles cai e volta no meio; depois, um terceiro jogador é recusado e uma sala inexistente não abre. Leva ~2 minutos
+  deles cai e volta no meio; outros dois se encontram pela partida rápida e jogam; um terceiro jogador é recusado e
+  uma sala inexistente não abre. Leva ~2 minutos
   e só roda quando pedido:
 
   ```bash
@@ -341,6 +389,13 @@ celular em inglês pelo link. O roteiro cobriu:
 - resultado com confete;
 - revanche e saída;
 - voltar para a campanha no mesmo painel.
+
+E a partida rápida, também com duas pessoas (desktop em PT, celular em EN):
+
+- procurar, cancelar e procurar de novo;
+- Enter no campo do apelido (sem código) inicia a busca;
+- os dois pareados, contagem e partida sem clicar em "pronto";
+- um adversário que é pareado mas nunca entra na sala: depois de 10 s a pessoa volta sozinha para a fila.
 
 Nenhum erro no console.
 
@@ -360,10 +415,11 @@ partida em andamento volta para o lobby (ver [Limitações](#limitações-conhec
 
 Nada manual. O `wrangler.jsonc` já declara:
 
-- o binding `VOLLEY_ROOMS` → classe `VolleyRoom` (exportada por `worker/index.ts`);
-- a migration `v1-volley-rooms` com `new_sqlite_classes: ["VolleyRoom"]`: o primeiro `wrangler deploy` (ou o deploy
-  pela integração com o GitHub) cria a classe na conta, e os seguintes não fazem nada;
-- o rate limit `ROOM_LIMIT` (namespace `1003`).
+- os bindings `VOLLEY_ROOMS` → classe `VolleyRoom` e `VOLLEY_QUEUE` → classe `VolleyQueue` (exportadas por
+  `worker/index.ts`);
+- as migrations `v1-volley-rooms` e `v2-volley-queue` (`new_sqlite_classes`): o deploy cria cada classe na conta uma
+  vez, e os seguintes não fazem nada;
+- os rate limits `ROOM_LIMIT` (namespace `1003`) e `QUEUE_LIMIT` (namespace `1004`).
 
 Regras para o futuro: **nunca edite nem remova uma migration já publicada**. Renomear ou apagar a classe exige uma
 migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo incompatíveis sobem
@@ -379,11 +435,13 @@ migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo i
 - **Navegadores diferentes.** A física usa ponto flutuante; motores JavaScript diferentes podem divergir na última
   casa decimal em funções como `Math.hypot` e `Math.sin`. Isso não afeta o resultado (o servidor decide), no máximo gera uma
   correção mínima, que o arredondamento dos snapshots absorve.
-- **Sem espectadores e sem pareamento automático:** ver as próximas fases.
+- **Fila única, sem nível:** a partida rápida junta quem chegar primeiro, sem olhar habilidade nem região. O
+  pareamento por ELO vem com o ranking (fase 3).
+- **Sem espectadores:** ver as próximas fases.
 
 ## Próximas fases
 
-2. **Partida rápida:** uma fila (outro Durable Object) que junta dois desconhecidos numa sala nova.
+2. ~~**Partida rápida**~~: feita (ver [Partida rápida](#partida-rápida)).
 3. **Ranking online (ELO):** resultado gravado pelo servidor no D1 (o placar já é autoritativo, não precisa das
    defesas contra trapaça do ranking local), com a revanche já pronta desta fase.
 4. **Acabamento:** emotes rápidos, espectadores (um terceiro socket só de leitura) e indicador de conexão mais rico.

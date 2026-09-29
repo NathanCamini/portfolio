@@ -21,11 +21,15 @@ import { createGame } from '../engine/physics';
 import { renderGame, type View } from '../engine/render';
 import type { Input, Side } from '../engine/types';
 import { KEYMAP, type GameKey } from '../useVolleyballGame';
+import { parseQueueServerMessage, type QueueClientMessage } from '@/lib/volley-online/queue';
 import { showRoomInUrl } from './link';
 
 /**
  * Browser side of the online match (docs/volei-online.md, "No navegador").
  *
+ * - Quick match: a WebSocket to the queue's Durable Object until it pairs us,
+ *   then the room it opened (joined ready; back to the queue if the opponent
+ *   never shows up).
  * - One WebSocket to the room's Durable Object; if it drops mid-match the
  *   hook reconnects with the seat's token (kept per room in sessionStorage)
  *   while the server holds the seat and pauses the match.
@@ -36,10 +40,15 @@ import { showRoomInUrl } from './link';
  *   error, ping); everything per-frame lives in a ref.
  */
 
-export type OnlineStatus = 'idle' | 'working' | 'online' | 'reconnecting';
+export type OnlineStatus = 'idle' | 'searching' | 'working' | 'online' | 'reconnecting';
 
 /** Delays between reconnection attempts: ~16 s in total, a bit more than the seat is held. */
 const RETRY_MS = [300, 700, 1500, 2500, 4000, 7000];
+
+/** Quick match: a room where the opponent hasn't shown up after this long goes back to the queue. */
+const QUICK_JOIN_MS = 10_000;
+
+const wsOrigin = () => location.origin.replace(/^http/, 'ws');
 
 const tokenKey = (code: string) => `volley-online:${code}`;
 const readToken = (code: string) => {
@@ -75,6 +84,11 @@ interface Net {
   attempt: number;
   /** No reconnecting: the player left, or the server refused us for good. */
   stopped: boolean;
+  /** Quick match: the socket to the queue while searching. */
+  queue: WebSocket | null;
+  /** The room came from the queue: ready right away, back to the queue if the opponent never shows. */
+  quick: boolean;
+  quickTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface Options {
@@ -94,6 +108,9 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
   const [ping, setPing] = useState<number | null>(null);
   /** performance.now() when the room's countdown / reconnection window ends. */
   const [deadline, setDeadline] = useState<number | null>(null);
+  /** Quick match: Date.now() when the search started, and whether the current room came from the queue. */
+  const [searchingSince, setSearchingSince] = useState<number | null>(null);
+  const [quickMatch, setQuickMatch] = useState(false);
 
   const net = useRef<Net>({
     ws: null,
@@ -109,7 +126,12 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     retryTimer: null,
     attempt: 0,
     stopped: true,
+    queue: null,
+    quick: false,
+    quickTimer: null,
   });
+  /** Quick-match room with no opponent: leave it and search again (set once the callbacks exist). */
+  const requeue = useRef<() => void>(() => {});
   const labels = useRef({ strings, youLabel });
   useEffect(() => {
     labels.current = { strings, youLabel };
@@ -126,10 +148,26 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     n.stopped = true;
     n.attempt++;
     if (n.retryTimer) clearTimeout(n.retryTimer);
+    if (n.quickTimer) clearTimeout(n.quickTimer);
     const ws = n.ws;
+    const queue = n.queue;
     n.ws = null;
+    n.queue = null;
     ws?.close(1000);
-    Object.assign(n, { code: null, side: null, room: null, predictor: null, last: null, retries: 0, retryTimer: null });
+    queue?.close(1000);
+    Object.assign(n, {
+      code: null,
+      side: null,
+      room: null,
+      predictor: null,
+      last: null,
+      retries: 0,
+      retryTimer: null,
+      quick: false,
+      quickTimer: null,
+    });
+    setSearchingSince(null);
+    setQuickMatch(false);
     setRoom(null);
     setSide(null);
     setPing(null);
@@ -140,9 +178,21 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
   }, []);
 
   const showRoom = useCallback((room: RoomView) => {
-    net.current.room = room;
+    const n = net.current;
+    n.room = room;
     setRoom(room);
     setDeadline(room.remainingMs === null ? null : performance.now() + room.remainingMs);
+    // A stranger's room: if they never arrive (closed the tab while being matched), find someone else.
+    const alone = n.quick && room.phase === 'waiting' && n.side !== null && !room.seats[n.side === 0 ? 1 : 0];
+    if (alone && !n.quickTimer) {
+      n.quickTimer = setTimeout(() => {
+        n.quickTimer = null;
+        requeue.current();
+      }, QUICK_JOIN_MS);
+    } else if (!alone && n.quickTimer) {
+      clearTimeout(n.quickTimer);
+      n.quickTimer = null;
+    }
   }, []);
 
   const onMessage = useCallback(
@@ -163,7 +213,10 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
           setSide(m.side);
           setStatus('online');
           setError(null);
+          setSearchingSince(null);
           send({ t: 'ping', c: performance.now() });
+          // Matched with a stranger: nothing to wait for, the countdown starts once both are in.
+          if (n.quick && !m.room.live) send({ t: 'ready', ready: true });
           break;
         }
         case 'room': {
@@ -210,7 +263,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     (code: string) => {
       const n = net.current;
       const open = () => {
-        const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/volley/rooms/${code}`);
+        const ws = new WebSocket(`${wsOrigin()}/api/volley/rooms/${code}`);
         n.ws = ws;
         ws.onopen = () => {
           if (n.ws !== ws) return;
@@ -288,7 +341,54 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     [enter, reset],
   );
 
+  /** Quick match: wait in the queue until someone else joins, then go to the room it opens for both. */
+  const quick = useCallback(
+    async (name: string) => {
+      const n = net.current;
+      const attempt = ++n.attempt;
+      n.name = name;
+      n.stopped = false;
+      n.quick = true;
+      setStatus('searching');
+      setError(null);
+      setQuickMatch(true);
+      setSearchingSince(Date.now());
+      // Plain HTTP first: a refused WebSocket handshake can't say "rate limited" or "unavailable".
+      let why: OnlineErrorKey | null = null;
+      try {
+        const res = await fetch('/api/volley/queue', { cache: 'no-store' });
+        if (res.status === 429) why = 'rate_limited';
+        else if (res.status === 503) why = 'unavailable';
+        else if (!res.ok) why = 'network';
+      } catch {
+        why = 'network';
+      }
+      if (attempt !== n.attempt) return; // cancelled meanwhile
+      if (why) return reset(why);
+
+      const ws = new WebSocket(`${wsOrigin()}/api/volley/queue`);
+      n.queue = ws;
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, name } satisfies QueueClientMessage));
+      ws.onmessage = (e) => {
+        const m = parseQueueServerMessage(e.data);
+        if (!m || n.queue !== ws) return;
+        if (m.t === 'matched') {
+          n.queue = null;
+          ws.close(1000);
+          void enter(m.code, name, attempt);
+        } else if (m.t === 'error') reset(m.code);
+      };
+      ws.onclose = () => {
+        if (n.queue === ws) reset('network');
+      };
+    },
+    [enter, reset],
+  );
+
   const setReady = useCallback((ready: boolean) => send({ t: 'ready', ready }), [send]);
+
+  /** Stop searching (or connecting): back to the start screen. */
+  const cancel = useCallback(() => reset(null), [reset]);
 
   const leave = useCallback(() => {
     send({ t: 'leave' });
@@ -296,6 +396,14 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     if (code) writeToken(code, null);
     reset(null);
   }, [reset, send]);
+
+  useEffect(() => {
+    requeue.current = () => {
+      const name = net.current.name;
+      leave();
+      void quick(name);
+    };
+  }, [leave, quick]);
 
   const press = useCallback((k: GameKey) => void (net.current.keys[k] = true), []);
   const release = useCallback((k: GameKey) => void (net.current.keys[k] = false), []);
@@ -397,11 +505,31 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
       n.stopped = true;
       n.attempt++;
       if (n.retryTimer) clearTimeout(n.retryTimer);
+      if (n.quickTimer) clearTimeout(n.quickTimer);
       n.ws?.close(1000);
       n.ws = null;
+      n.queue?.close(1000);
+      n.queue = null;
       showRoomInUrl(null);
     };
   }, []);
 
-  return { status, room, side, error, ping, deadline, create, enter, setReady, leave, press, release };
+  return {
+    status,
+    room,
+    side,
+    error,
+    ping,
+    deadline,
+    quickMatch,
+    searchingSince,
+    create,
+    enter,
+    quick,
+    cancel,
+    setReady,
+    leave,
+    press,
+    release,
+  };
 }
