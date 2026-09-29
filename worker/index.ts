@@ -15,6 +15,8 @@ import { handleVolley, type VolleyEnv } from './volley';
 
 /** The online volleyball room (docs/volei-online.md): bound as VOLLEY_ROOMS in wrangler.jsonc. */
 export { VolleyRoom } from './volley-room';
+/** The quick-match queue: bound as VOLLEY_QUEUE. */
+export { VolleyQueue } from './volley-queue';
 
 /**
  * Cloudflare Worker. `run_worker_first: ["/api/*"]` in wrangler.jsonc routes

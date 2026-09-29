@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
-import { rememberedName } from '@/components/ranking/useRanking';
+import { rememberedName, rememberName } from '@/components/ranking/useRanking';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { OnlineStrings } from '@/i18n/types';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -46,7 +46,8 @@ function useSecondsLeft(deadline: number | null, remainingMs: number | null) {
 
 /**
  * The online tab (docs/volei-online.md, "No navegador"): the court canvas plus
- * a card for each moment of a room: start (nickname, create or join),
+ * a card for each moment of a room: start (nickname; quick match, create or
+ * join), searching the quick-match queue,
  * lobby (link to share, seats, ready), countdown, paused (the other player
  * dropped), reconnecting (we dropped) and the result with a rematch.
  * The connection and the netcode live in useOnlineVolley.
@@ -58,7 +59,23 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isTouch = useMediaQuery('(pointer: coarse)');
-  const { status, room, side, error, deadline, create, enter, setReady, leave, press, release } = useOnlineVolley({
+  const {
+    status,
+    room,
+    side,
+    error,
+    deadline,
+    quickMatch,
+    searchingSince,
+    create,
+    enter,
+    quick,
+    cancel,
+    setReady,
+    leave,
+    press,
+    release,
+  } = useOnlineVolley({
     canvasRef,
     stageRef,
     panelRef,
@@ -68,7 +85,9 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
 
   const phase = status === 'online' ? (room?.phase ?? null) : null;
   const card = status !== 'online' || phase === 'waiting' || phase === 'paused' || phase === 'over';
-  const tall = status === 'idle' || status === 'working' || phase === 'waiting' || phase === 'over';
+  const tall =
+    status === 'idle' || status === 'searching' || status === 'working' || phase === 'waiting' || phase === 'over';
+  const searching = status === 'searching' || (status === 'working' && quickMatch);
   const inMatch = status === 'reconnecting' || !!room?.live;
 
   useEffect(() => onChrome({ overlay: tall, inMatch }), [tall, inMatch, onChrome]);
@@ -92,7 +111,13 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   const rivalName = rival?.name ?? '—';
 
   let overlay: ReactNode = null;
-  if (status === 'idle' || status === 'working') {
+  if (searching) {
+    overlay = (
+      <Card>
+        <Searching since={searchingSince} on={on} onCancel={cancel} />
+      </Card>
+    );
+  } else if (status === 'idle' || status === 'working') {
     overlay = (
       <Card>
         <StartCard
@@ -102,6 +127,7 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
           error={error ? on.errors[error] : null}
           initialCode={joinCode ?? ''}
           onCreate={create}
+          onQuick={quick}
           onJoin={enter}
         />
       </Card>
@@ -123,8 +149,9 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   } else if (room && phase === 'waiting') {
     overlay = (
       <Card>
-        <RoomHeader code={room.code} on={on} />
-        <ShareLink code={room.code} on={on} />
+        <RoomHeader code={room.code} on={on} kicker={quickMatch ? on.found : undefined} />
+        {/* A stranger's room from the queue isn't one to share. */}
+        {!quickMatch && <ShareLink code={room.code} on={on} />}
         <Seats room={room} side={me} on={on} />
         <Ready room={room} side={me} on={on} label={on.ready} setReady={setReady} leave={leave} />
       </Card>
@@ -215,12 +242,40 @@ function Card({ children }: { children: ReactNode }) {
   return <div className={styles.card}>{children}</div>;
 }
 
-function RoomHeader({ code, on }: { code: string; on: OnlineStrings }) {
+function RoomHeader({ code, on, kicker }: { code: string; on: OnlineStrings; kicker?: string }) {
   return (
     <header className={styles.roomHead}>
-      <p className={styles.kicker}>{on.room}</p>
+      <p className={styles.kicker}>{kicker ?? on.room}</p>
       <p className={styles.code}>{code}</p>
     </header>
+  );
+}
+
+/** In the quick-match queue: how long we've been waiting, and a way out. */
+function Searching({ since, on, onCancel }: { since: number | null; on: OnlineStrings; onCancel: () => void }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+  const seconds = since === null || now === null ? 0 : Math.max(0, Math.floor((now - since) / 1000));
+  const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  return (
+    <>
+      <p className={styles.status} role="status">
+        <span className={styles.spinner} aria-hidden="true" />
+        {on.searching}
+      </p>
+      <p className={styles.elapsed} aria-hidden="true">
+        {elapsed}
+      </p>
+      <p className={styles.sub}>{on.searchingHint}</p>
+      <div className={styles.actions}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+          {on.cancel}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -346,6 +401,7 @@ function StartCard({
   error,
   initialCode,
   onCreate,
+  onQuick,
   onJoin,
 }: {
   on: OnlineStrings;
@@ -354,6 +410,7 @@ function StartCard({
   error: string | null;
   initialCode: string;
   onCreate: (name: string) => void;
+  onQuick: (name: string) => void;
   onJoin: (code: string, name: string) => void;
 }) {
   const titleId = useId();
@@ -379,6 +436,7 @@ function StartCard({
       return null;
     }
     setProblem(null);
+    rememberName(nick.name); // cancelling (or an error) brings this card back: keep what they typed
     return nick.name;
   };
 
@@ -387,10 +445,17 @@ function StartCard({
     if (nick) onCreate(nick);
   };
 
-  // Enter anywhere in the form: join when there's a code, otherwise create a room.
+  const quickMatch = () => {
+    const nick = nickname();
+    if (nick) onQuick(nick);
+  };
+
+  // Enter anywhere in the form: join when there's a code, otherwise a quick match.
+  // (The name field handles its own Enter: with no code the form's only submit button,
+  // Join, is disabled, and a disabled default button blocks implicit submission.)
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!code) return createRoom();
+    if (!code) return quickMatch();
     const nick = nickname();
     if (!nick) return;
     const normalized = normalizeRoomCode(code);
@@ -422,6 +487,9 @@ function StartCard({
           setName(e.target.value);
           if (problem && problem !== 'code') setProblem(null);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !code) submit(e);
+        }}
         placeholder={on.namePlaceholder}
         maxLength={NAME_MAX + 8}
         autoComplete="nickname"
@@ -430,15 +498,20 @@ function StartCard({
         aria-invalid={!!problem && problem !== 'code'}
         aria-describedby={errorId}
       />
-      {/* Arrived with a room link: joining it is the main action, not creating another. */}
-      <button
-        type="button"
-        className={`btn ${initialCode ? 'btn-secondary' : 'btn-primary'}`}
-        onClick={createRoom}
-        disabled={busy}
-      >
-        {on.create}
-      </button>
+      {/* Arrived with a room link: joining it is the main action, not a stranger or another room. */}
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={`btn ${initialCode ? 'btn-secondary' : 'btn-primary'}`}
+          onClick={quickMatch}
+          disabled={busy}
+        >
+          {on.quick}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={createRoom} disabled={busy}>
+          {on.create}
+        </button>
+      </div>
 
       <p className={styles.divider}>
         <span>{on.or}</span>

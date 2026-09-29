@@ -7,6 +7,7 @@ import {
   type RoomView,
   type ServerMessage,
 } from '../../src/lib/volley-online/protocol';
+import { parseQueueServerMessage, type QueueServerMessage } from '../../src/lib/volley-online/queue';
 import { seeded, sideBot } from '../../src/lib/volley-online/testing';
 
 /**
@@ -19,6 +20,7 @@ import { seeded, sideBot } from '../../src/lib/volley-online/testing';
  * ready up, and play a whole match through the actual Durable Object —
  * each one predicting locally exactly like the browser does (Predictor +
  * TickClock). One of them drops mid-match and comes back with its token.
+ * Two more meet through the quick-match queue.
  * Skipped unless VOLLEY_E2E_URL is set.
  */
 
@@ -117,6 +119,23 @@ async function createRoom() {
   expect(res.status).toBe(201);
   return ((await res.json()) as { code: string }).code;
 }
+/** Waits in the quick-match queue; resolves with the room code it's sent to. */
+function queueUp(name: string) {
+  const ws = new WebSocket(`${BASE!.replace(/^http/, 'ws')}/api/volley/queue`, {
+    headers: { Origin: BASE! },
+  } as unknown as string[]);
+  const messages: QueueServerMessage[] = [];
+  const matched = new Promise<string>((resolve, reject) => {
+    ws.addEventListener('open', () => ws.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, name })));
+    ws.addEventListener('message', (e: MessageEvent) => {
+      const m = parseQueueServerMessage(e.data)!;
+      messages.push(m);
+      if (m.t === 'matched') resolve(m.code);
+      if (m.t === 'error') reject(new Error(m.code));
+    });
+  });
+  return { ws, messages, matched };
+}
 
 describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
   it('two bots play a full match, with a drop and a rejoin in the middle', { timeout: 15 * 60_000 }, async () => {
@@ -154,6 +173,26 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     expect(b.errors).toEqual([]);
     a.ws.close();
     b.ws.close();
+  });
+
+  it('quick match pairs two strangers into one new room, where they play', { timeout: 60_000 }, async () => {
+    const first = queueUp('Fila Um');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(first.messages).toEqual([{ t: 'queued' }]); // alone in line
+    const second = queueUp('Fila Dois');
+    const [codeA, codeB] = await Promise.all([first.matched, second.matched]);
+    expect(codeA).toBe(codeB);
+
+    const a = new BotPlayer('Fila Um', 5);
+    const b = new BotPlayer('Fila Dois', 6);
+    await a.connect(codeA);
+    await b.connect(codeB);
+    a.send({ t: 'ready', ready: true });
+    b.send({ t: 'ready', ready: true });
+    await a.until((m) => m.t === 'room' && m.room.phase === 'playing');
+    await a.until((m) => m.t === 'state' && m.s.tick > 120);
+    expect([a.errors, b.errors]).toEqual([[], []]);
+    [a, b].forEach((p) => (p.stop(), p.ws.close()));
   });
 
   it('refuses a third player and an unknown room', { timeout: 30_000 }, async () => {
