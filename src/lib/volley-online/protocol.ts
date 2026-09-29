@@ -33,7 +33,16 @@ export const NET = {
   /** A room nobody is connected to is deleted after this long. */
   ROOM_TTL_MS: 2 * 60 * 60 * 1000,
   PING_EVERY_MS: 2_000,
+  /** A player can react at most this often (anything faster is dropped, not an error). */
+  EMOTE_COOLDOWN_MS: 1_500,
+  /** Spectators per room. */
+  MAX_SPECTATORS: 20,
 } as const;
+
+// ---------------------------------------------------------------- reactions
+
+/** The quick reactions, by id (keys 1–6 in the browser). Emoji read the same in every language. */
+export const EMOTES = ['👍', '👏', '😂', '😮', '🔥', '😅'] as const;
 
 // ---------------------------------------------------------------- room codes
 
@@ -149,6 +158,8 @@ export interface RoomView {
   remainingMs: number | null;
   /** A match is under way: running, paused, or counting down to resume after a pause. */
   live: boolean;
+  /** People watching (read-only sockets). */
+  spectators: number;
   /** Matches here count for the online ranking (rooms opened by the quick-match queue). */
   rated: boolean;
   /** Matches won in this room, per side (rematches add up). */
@@ -180,11 +191,14 @@ export type ErrorCode =
   | 'unavailable';
 
 export type ClientMessage =
-  | { t: 'hello'; v: number; name: string; token?: string; pid?: string }
+  /** `watch`: join as a spectator (no seat; `name` is ignored). */
+  | { t: 'hello'; v: number; name: string; token?: string; pid?: string; watch?: true }
   | { t: 'ready'; ready: boolean }
   | { t: 'input'; tick: number; bits: number }
   | { t: 'ping'; c: number; rtt?: number }
-  | { t: 'leave' };
+  | { t: 'leave' }
+  /** A quick reaction (EMOTES[id]); players only. */
+  | { t: 'emote'; id: number };
 
 export type ServerMessage =
   | { t: 'welcome'; side: Side; token: string; room: RoomView }
@@ -193,7 +207,11 @@ export type ServerMessage =
   /** The opponent changed keys, effective from `tick` (relayed the moment the server gets it). */
   | { t: 'opp'; tick: number; bits: number }
   | { t: 'pong'; c: number }
-  | { t: 'error'; code: ErrorCode };
+  | { t: 'error'; code: ErrorCode }
+  /** Joined as a spectator (hello with `watch`): the room, then its snapshots and reactions. */
+  | { t: 'watching'; room: RoomView }
+  /** A player reacted. */
+  | { t: 'emote'; side: Side; id: number };
 
 /** Tokens and player ids: 128 random bits as 32 lowercase hex characters. */
 export const isHex32 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{32}$/.test(v);
@@ -220,10 +238,12 @@ export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | n
       if (!isInt(o.v, 0, 1000) || typeof o.name !== 'string' || o.name.length > 64) return null;
       if (o.token !== undefined && !isHex32(o.token)) return null;
       if (o.pid !== undefined && !isHex32(o.pid)) return null;
+      if (o.watch !== undefined && o.watch !== true) return null;
       return {
         t: 'hello',
         v: o.v,
         name: o.name,
+        ...(o.watch ? { watch: true } : {}),
         ...(o.token ? { token: o.token as string } : {}),
         ...(o.pid ? { pid: o.pid as string } : {}),
       };
@@ -236,6 +256,8 @@ export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | n
     case 'ping':
       if (typeof o.c !== 'number' || !Number.isFinite(o.c)) return null;
       return isInt(o.rtt, 0, 60_000) ? { t: 'ping', c: o.c, rtt: o.rtt } : { t: 'ping', c: o.c };
+    case 'emote':
+      return isInt(o.id, 0, EMOTES.length - 1) ? { t: 'emote', id: o.id } : null;
     case 'leave':
       return { t: 'leave' };
     default:

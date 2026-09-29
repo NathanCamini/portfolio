@@ -29,7 +29,8 @@ import type { VolleyEnv } from './volley';
 
 interface Attachment {
   id: string;
-  side: Side | null;
+  /** The seat this socket holds, 'watch' for a spectator, null before its hello. */
+  side: Side | 'watch' | null;
   /** The client's address (CF-Connecting-IP), so one person can't farm rating off two tabs. */
   ip?: string;
 }
@@ -94,6 +95,7 @@ export class VolleyRoom implements DurableObject {
       for (const ws of ctx.getWebSockets()) {
         const side = (ws.deserializeAttachment() as Attachment | null)?.side;
         if (side === 0 || side === 1) this.core.restore(this.connFor(ws), side);
+        else if (side === 'watch') this.core.restoreWatcher(this.connFor(ws));
         else ws.close(4000, 'expired'); // connected but never said hello before the object slept
       }
       this.core.restored();

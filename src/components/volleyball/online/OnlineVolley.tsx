@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { checkNickname, NAME_MAX, type NameProblem } from '@/lib/ranking/nickname';
 import type { RatingChange } from '@/lib/volley-online/elo';
 import {
+  EMOTES,
   isRoomCode,
   normalizeRoomCode,
   ROOM_CODE_LENGTH,
@@ -80,6 +81,9 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
     error,
     deadline,
     quickMatch,
+    watching,
+    emotes,
+    emote,
     searchingSince,
     create,
     enter,
@@ -102,7 +106,8 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   const tall =
     status === 'idle' || status === 'searching' || status === 'working' || phase === 'waiting' || phase === 'over';
   const searching = status === 'searching' || (status === 'working' && quickMatch);
-  const inMatch = status === 'reconnecting' || !!room?.live;
+  // A spectator can leave any time; a player mid-match would forfeit, so the tabs lock for them.
+  const inMatch = !watching && (status === 'reconnecting' || !!room?.live);
 
   useEffect(() => onChrome({ overlay: tall, inMatch }), [tall, inMatch, onChrome]);
   useEffect(() => () => onChrome({ overlay: false, inMatch: false }), [onChrome]);
@@ -162,6 +167,17 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
           <span className={styles.spinner} aria-hidden="true" />
           {on.reconnecting}
         </p>
+        <div className={styles.actions}>
+          <button type="button" className="btn btn-secondary" onClick={leave}>
+            {on.leave}
+          </button>
+        </div>
+      </Card>
+    );
+  } else if (watching && room && card) {
+    overlay = (
+      <Card>
+        <WatchCard room={room} on={on} seconds={seconds} />
         <div className={styles.actions}>
           <button type="button" className="btn btn-secondary" onClick={leave}>
             {on.leave}
@@ -237,6 +253,24 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
     );
   }
 
+  const showReactions = !watching && !!room && phase !== 'waiting' && phase !== null;
+  const reactionBar = (
+    <div className={`${styles.emoteBar} ${isTouch ? styles.emoteRow : ''}`} role="group" aria-label={on.reactions}>
+      {EMOTES.map((e, i) => (
+        <button
+          key={e}
+          type="button"
+          className={styles.emoteBtn}
+          onClick={() => emote(i)}
+          title={`${on.reactions}: ${i + 1}`}
+          aria-label={`${e} (${i + 1})`}
+        >
+          {e}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <>
       <div ref={stageRef} className={panel.stage}>
@@ -257,13 +291,40 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
           </div>
         )}
         {(phase === 'playing' || phase === 'countdown') && room && (
-          <p className={styles.hud} aria-hidden="true">
-            {on.room} {room.code}
-            {room.seats[me]?.ping != null && ` · ${on.ping} ${room.seats[me]!.ping} ms`}
-          </p>
+          <div className={styles.hud}>
+            {watching ? (
+              <span>
+                {on.watching} · {on.room} {room.code}
+              </span>
+            ) : (
+              <>
+                <Signal ping={room.seats[me]?.ping ?? null} label={on.you} on={on} />
+                <Signal ping={rival?.ping ?? null} label={rivalName} on={on} />
+              </>
+            )}
+            {room.spectators > 0 && (
+              <span title={on.spectators.replace('{n}', String(room.spectators))}>👁 {room.spectators}</span>
+            )}
+          </div>
         )}
+        {/* Reactions: players, from the countdown on (keys 1–6). Over the court on desktop, under it on touch screens. */}
+        {showReactions && !isTouch && reactionBar}
+        {emotes.map((r) => {
+          // The left of the screen is the left seat for a spectator, and always "you" for a player.
+          const left = watching ? r.side === 0 : r.side === me;
+          return (
+            <span
+              key={r.key}
+              className={`${styles.bubble} ${left ? styles.bubbleLeft : styles.bubbleRight}`}
+              aria-hidden="true"
+            >
+              {EMOTES[r.id]}
+            </span>
+          );
+        })}
       </div>
 
+      {showReactions && isTouch && reactionBar}
       {isTouch && <TouchPad labels={vb} press={press} release={release} />}
     </>
   );
@@ -353,8 +414,65 @@ function ShareLink({ code, on }: { code: string; on: OnlineStrings }) {
 }
 
 /** Both seats, the player's first: name, ready / dropped, round trip. */
-function Seats({ room, side, on }: { room: RoomView; side: Side; on: OnlineStrings }) {
-  const order: Side[] = side === 0 ? [0, 1] : [1, 0];
+/** Connection quality from the round trip a player reported: three bars, like a phone. */
+function Signal({ ping, label, on }: { ping: number | null; label: string; on: OnlineStrings }) {
+  const level = ping === null ? 0 : ping < 80 ? 3 : ping < 160 ? 2 : 1;
+  const text = ping === null ? '…' : `${ping} ms`;
+  return (
+    <span className={`${styles.signal} ${styles[`q${level}`]}`} title={`${label}: ${on.ping} ${text}`}>
+      <span className={styles.bars} aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className={styles.signalName}>{label}</span> {text}
+    </span>
+  );
+}
+
+/** What a spectator sees between rallies: who's playing, and what's going on. */
+function WatchCard({ room, on, seconds }: { room: RoomView; on: OnlineStrings; seconds: number | null }) {
+  const [a, b] = room.seats;
+  const dropped = room.seats.find((s) => s && !s.connected);
+  return (
+    <>
+      <header className={styles.roomHead}>
+        <p className={styles.kicker}>
+          {on.watching} · {on.room} {room.code}
+        </p>
+        {room.result && room.phase === 'over' ? (
+          <>
+            <p className={styles.headline}>{on.lost.replace('{name}', room.result.names[room.result.winner])}</p>
+            <p className={styles.scoreline}>
+              {room.result.score[0]} <span className={styles.times}>×</span> {room.result.score[1]}
+            </p>
+            <p className={styles.sub}>
+              {on.series}: {room.wins[0]} × {room.wins[1]}
+            </p>
+          </>
+        ) : (
+          <p className={styles.headline}>
+            {a?.name ?? '—'} <span className={styles.times}>×</span> {b?.name ?? '—'}
+          </p>
+        )}
+      </header>
+      {room.phase === 'paused' && dropped && (
+        <p className={styles.status} role="status">
+          <span className={styles.spinner} aria-hidden="true" />
+          {on.paused.replace('{name}', dropped.name)}
+        </p>
+      )}
+      {room.phase === 'paused' && seconds !== null && (
+        <p className={styles.sub}>{on.pausedWatch.replace('{n}', String(seconds))}</p>
+      )}
+      {room.phase === 'waiting' && <p className={styles.sub}>{on.watchingHint}</p>}
+      <Seats room={room} side={null} on={on} />
+    </>
+  );
+}
+
+function Seats({ room, side, on }: { room: RoomView; side: Side | null; on: OnlineStrings }) {
+  const order: Side[] = side === 1 ? [1, 0] : [0, 1];
   return (
     <ul className={styles.seats}>
       {order.map((i) => {

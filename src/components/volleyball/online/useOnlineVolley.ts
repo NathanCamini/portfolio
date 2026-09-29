@@ -7,6 +7,7 @@ import { celebrate, originOf } from '@/lib/confetti';
 import { readPalette } from '@/lib/palette';
 import { mirrorState, Predictor, TickClock } from '@/lib/volley-online/predictor';
 import {
+  EMOTES,
   mirrorBits,
   NET,
   packInput,
@@ -22,6 +23,7 @@ import { renderGame, type View } from '../engine/render';
 import type { Input, Side } from '../engine/types';
 import { KEYMAP, type GameKey } from '../useVolleyballGame';
 import { parseQueueServerMessage, type QueueClientMessage } from '@/lib/volley-online/queue';
+import { SnapshotBuffer } from '@/lib/volley-online/spectator';
 import { showRoomInUrl } from './link';
 import { playerId } from './player';
 
@@ -45,6 +47,16 @@ export type OnlineStatus = 'idle' | 'searching' | 'working' | 'online' | 'reconn
 
 /** Delays between reconnection attempts: ~16 s in total, a bit more than the seat is held. */
 const RETRY_MS = [300, 700, 1500, 2500, 4000, 7000];
+
+/** A reaction on screen. `side` is the room's side (0 = left seat). */
+export interface Reaction {
+  key: string;
+  side: Side;
+  id: number;
+}
+
+/** How long a reaction bubble stays up. */
+const EMOTE_SHOWN_MS = 2_200;
 
 /** Quick match: a room where the opponent hasn't shown up after this long goes back to the queue. */
 const QUICK_JOIN_MS = 10_000;
@@ -85,6 +97,11 @@ interface Net {
   attempt: number;
   /** No reconnecting: the player left, or the server refused us for good. */
   stopped: boolean;
+  /** Spectating (a full room): no seat, no prediction, snapshots drawn one behind. */
+  watch: boolean;
+  spectate: SnapshotBuffer;
+  /** When we last reacted (the server drops faster ones anyway). */
+  lastEmote: number;
   /** Quick match: the socket to the queue while searching. */
   queue: WebSocket | null;
   /** The room came from the queue: ready right away, back to the queue if the opponent never shows. */
@@ -112,6 +129,9 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
   /** Quick match: Date.now() when the search started, and whether the current room came from the queue. */
   const [searchingSince, setSearchingSince] = useState<number | null>(null);
   const [quickMatch, setQuickMatch] = useState(false);
+  const [watching, setWatching] = useState(false);
+  /** Reactions on screen right now (each lasts EMOTE_SHOWN_MS). */
+  const [emotes, setEmotes] = useState<Reaction[]>([]);
 
   const net = useRef<Net>({
     ws: null,
@@ -130,6 +150,9 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     queue: null,
     quick: false,
     quickTimer: null,
+    watch: false,
+    spectate: new SnapshotBuffer(),
+    lastEmote: -Infinity,
   });
   /** Quick-match room with no opponent: leave it and search again (set once the callbacks exist). */
   const requeue = useRef<() => void>(() => {});
@@ -166,9 +189,13 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
       retryTimer: null,
       quick: false,
       quickTimer: null,
+      watch: false,
+      spectate: new SnapshotBuffer(),
     });
     setSearchingSince(null);
     setQuickMatch(false);
+    setWatching(false);
+    setEmotes([]);
     setRoom(null);
     setSide(null);
     setPing(null);
@@ -200,6 +227,23 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     (m: ServerMessage) => {
       const n = net.current;
       switch (m.t) {
+        case 'watching':
+          n.watch = true;
+          n.side = null;
+          n.retries = 0;
+          showRoomInUrl(n.code);
+          showRoom(m.room);
+          setSide(null);
+          setWatching(true);
+          setStatus('online');
+          setError(null);
+          break;
+        case 'emote': {
+          const key = `${m.side}-${performance.now()}`;
+          setEmotes((list) => [...list.filter((r) => r.side !== m.side), { key, side: m.side, id: m.id }]);
+          setTimeout(() => setEmotes((list) => list.filter((r) => r.key !== key)), EMOTE_SHOWN_MS);
+          break;
+        }
         case 'welcome': {
           n.side = m.side;
           n.retries = 0;
@@ -239,6 +283,10 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
           break;
         }
         case 'state':
+          if (n.watch) {
+            n.spectate.push(m.s, performance.now());
+            break;
+          }
           n.last = m.s;
           n.clock.observe(m.s.tick, performance.now());
           if (n.room?.phase === 'playing') n.predictor?.receive(m.s);
@@ -279,7 +327,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
             v: PROTOCOL_VERSION,
             name: n.name,
             pid: playerId(),
-            ...(token ? { token } : {}),
+            ...(n.watch ? { watch: true as const } : token ? { token } : {}),
           };
           ws.send(JSON.stringify(hello));
         };
@@ -318,7 +366,8 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
         else if (!res.ok) why = 'network';
         else {
           const info = (await res.json()) as { players: number };
-          if (info.players >= 2 && !readToken(code)) why = 'room_full';
+          // Full, and not our seat: watch instead.
+          n.watch = info.players >= 2 && !readToken(code);
         }
       } catch {
         why = 'network';
@@ -418,6 +467,22 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     };
   }, [leave, quick]);
 
+  /** A quick reaction (players only); the server shows it to everyone in the room. */
+  const emote = useCallback(
+    (id: number) => {
+      const n = net.current;
+      const now = performance.now();
+      if (n.watch || n.side === null || now - n.lastEmote < NET.EMOTE_COOLDOWN_MS) return;
+      n.lastEmote = now;
+      send({ t: 'emote', id });
+    },
+    [send],
+  );
+  const emoteRef = useRef(emote);
+  useEffect(() => {
+    emoteRef.current = emote;
+  }, [emote]);
+
   const press = useCallback((k: GameKey) => void (net.current.keys[k] = true), []);
   const release = useCallback((k: GameKey) => void (net.current.keys[k] = false), []);
 
@@ -459,6 +524,16 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
       const dt = Math.min((now - last) / 1000, 0.25);
       last = now;
       const n = net.current;
+      if (n.watch) {
+        // Spectators: no prediction, the court drawn one snapshot behind, left seat on the left.
+        const seats = n.room?.seats;
+        const names: [string, string] = [
+          (seats?.[0]?.name ?? '—').toUpperCase(),
+          (seats?.[1]?.name ?? '—').toUpperCase(),
+        ];
+        renderGame(ctx, n.spectate.view(now) ?? lobby, view, palette, labels.current.strings, names);
+        return;
+      }
       const p = n.predictor;
       if (p && n.room?.phase === 'playing' && n.clock.synced) {
         // Keys are pressed on screen directions; the right-hand player's court is mirrored.
@@ -483,6 +558,17 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     };
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // 1–6: a reaction (players, from the countdown to the result).
+      const reaction = Number(e.key) - 1;
+      if (down && !e.repeat && reaction >= 0 && reaction < EMOTES.length && panelActive()) {
+        const typing = (e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]');
+        const phase = net.current.room?.phase;
+        if (!typing && (phase === 'countdown' || phase === 'playing' || phase === 'over' || phase === 'paused')) {
+          e.preventDefault();
+          emoteRef.current(reaction);
+          return;
+        }
+      }
       const k = KEYMAP[e.key];
       if (!k) return;
       if (!down) net.current.keys[k] = false; // a release always counts, or the key would stay "held" into the next match
@@ -528,6 +614,9 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
   }, []);
 
   return {
+    watching,
+    emotes,
+    emote,
     status,
     room,
     side,

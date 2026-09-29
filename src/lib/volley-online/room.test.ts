@@ -73,11 +73,11 @@ class FakeConn implements Conn {
   constructor(readonly ip?: string) {}
   inbox: ServerMessage[] = [];
   closed: { code: number; reason: string } | null = null;
-  side: 0 | 1 | null = null;
+  side: 0 | 1 | 'watch' | null = null;
   /** Decodes what the room encoded (binary snapshots included), like the browser does. */
   send = (data: string | ArrayBuffer) => void this.inbox.push(parseServerMessage(data)!);
   close = (code: number, reason: string) => void (this.closed ??= { code, reason });
-  bind = (side: 0 | 1 | null) => void (this.side = side);
+  bind = (side: 0 | 1 | 'watch' | null) => void (this.side = side);
 
   last<T extends ServerMessage['t']>(t: T) {
     return this.inbox.filter((m): m is Extract<ServerMessage, { t: T }> => m.t === t).at(-1);
@@ -433,5 +433,72 @@ describe('rated rooms (quick match)', () => {
     expect(saved.rated).toBe(true);
     expect(saved.seats[0]).toMatchObject({ pid: PA, ip: '1.1.1.1' });
     expect(new RoomCore(new FakeHost(), saved).rated).toBe(true);
+  });
+});
+
+describe('spectators and reactions (phase 4)', () => {
+  const watch = (room: RoomCore, conn = new FakeConn()) => {
+    room.connect(conn);
+    room.message(conn, JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: '', watch: true }));
+    return conn;
+  };
+
+  it('lets anyone watch a full room: the room, the snapshots, and a count the players see', () => {
+    const { join, start, host, room } = setup();
+    const a = join('Nathan');
+    const b = join('Maria');
+    const w = watch(room);
+    expect(w.last('watching')!.room.seats.map((s) => s?.name)).toEqual(['Nathan', 'Maria']);
+    expect(w.side).toBe('watch');
+    expect(a.room.spectators).toBe(1);
+    start(a, b);
+    host.advance(500);
+    expect(w.last('state')!.s).toEqual(a.last('state')!.s); // the same truth as the players
+    expect(w.room.phase).toBe('playing');
+  });
+
+  it('keeps spectators out of the game: no ready, no input, no reactions; leaving is fine', () => {
+    const { join, room } = setup();
+    const a = join('Nathan');
+    const w = watch(room);
+    room.message(w, JSON.stringify({ t: 'ready', ready: true }));
+    expect(w.error).toBe('bad_message');
+    const w2 = watch(room);
+    expect(a.room.spectators).toBe(1);
+    room.message(w2, JSON.stringify({ t: 'leave' }));
+    expect(w2.closed).toMatchObject({ code: 1000 });
+    expect(a.room.spectators).toBe(0);
+  });
+
+  it('caps the audience', () => {
+    const { room } = setup();
+    for (let i = 0; i < NET.MAX_SPECTATORS; i++) watch(room);
+    expect(watch(room).error).toBe('room_full');
+  });
+
+  it('sends a reaction to everyone, and drops the ones sent too fast', () => {
+    const { join, say, host, room } = setup();
+    const a = join('Nathan');
+    const b = join('Maria');
+    const w = watch(room);
+    say(a, { t: 'emote', id: 4 });
+    for (const c of [a, b, w]) expect(c.last('emote')).toEqual({ t: 'emote', side: 0, id: 4 });
+    say(a, { t: 'emote', id: 1 }); // too soon
+    expect(b.last('emote')!.id).toBe(4);
+    host.advance(NET.EMOTE_COOLDOWN_MS);
+    say(a, { t: 'emote', id: 1 });
+    expect(b.last('emote')).toEqual({ t: 'emote', side: 0, id: 1 });
+    say(b, { t: 'emote', id: 99 }); // not a reaction
+    expect(b.error).toBe('bad_message');
+  });
+
+  it('brings spectators back after hibernation, and counts them as someone in the room', () => {
+    const { join, room, host } = setup();
+    join('Nathan');
+    const w = watch(room);
+    const again = new RoomCore(host, host.saved!);
+    again.restoreWatcher(w);
+    expect(again.empty).toBe(false);
+    expect(again.view().spectators).toBe(1);
   });
 });
