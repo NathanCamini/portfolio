@@ -3,7 +3,9 @@
 // static export into ./out and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "nathan-camini-portfolio",
+  // Must match the Worker connected to the repo in the Cloudflare dashboard
+  // (portfolio.<account>.workers.dev); a different name would deploy a second Worker.
+  "name": "portfolio",
   "compatibility_date": "2026-09-01",
   // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts);
   // /api/ranking/:game — the mini-games' global ranking (worker/store.ts, D1).
