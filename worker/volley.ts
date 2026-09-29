@@ -1,4 +1,10 @@
-import { isRoomCode, newRoomCode, type OnlineRankingResponse } from '../src/lib/volley-online/protocol';
+import {
+  isRoomCode,
+  newRoomCode,
+  type LiveResponse,
+  type OnlineRankingResponse,
+} from '../src/lib/volley-online/protocol';
+import { listLive } from './live';
 import { standing, topRatings } from './ratings';
 
 /**
@@ -8,6 +14,7 @@ import { standing, topRatings } from './ratings';
  *   GET  /api/volley/rooms/:code  → 101            WebSocket into that room's Durable Object
  *                                 → 200 { code, phase, players } / 404   without the upgrade (a pre-check)
  *   GET  /api/volley/ratings      → 200 { top }    the online ranking (top 10 by rating)
+ *   GET  /api/volley/live         → 200 { matches } the quick matches on now (the live showcase)
  *   GET  /api/volley/queue        → 101            WebSocket into the quick-match queue
  *                                 → 204            without the upgrade (a pre-check: online is up, not rate-limited)
  *
@@ -28,6 +35,8 @@ export interface VolleyEnv {
 
 /** Rows on the online board. */
 const TOP = 10;
+/** Matches in the live showcase. */
+const LIVE_LIMIT = 10;
 
 type VolleyError = 'not_found' | 'forbidden' | 'rate_limited' | 'unavailable';
 
@@ -50,6 +59,11 @@ const fail = (error: VolleyError, status: number) => json({ error }, status);
 const secureRandom = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
 
 export async function handleVolley(request: Request, url: URL, env: VolleyEnv): Promise<Response> {
+  if (url.pathname === '/api/volley/live') {
+    if (request.method !== 'GET') return fail('not_found', 404);
+    if (!env.DB) return fail('unavailable', 503);
+    return json({ matches: await listLive(env.DB, Date.now(), LIVE_LIMIT) } satisfies LiveResponse, 200);
+  }
   if (url.pathname === '/api/volley/ratings') {
     if (request.method !== 'GET') return fail('not_found', 404);
     if (!env.DB) return fail('unavailable', 503);

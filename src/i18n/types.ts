@@ -118,6 +118,13 @@ export interface OnlineStrings {
   watchingHint: string;
   spectators: string;
   pausedWatch: string;
+  /** The live showcase: button, title, help, empty list, the watch button, a paused match's tag. */
+  live: string;
+  liveTitle: string;
+  liveHelp: string;
+  liveEmpty: string;
+  watch: string;
+  livePaused: string;
   /** The reactions bar (keys 1–6). */
   reactions: string;
   /** A rated room whose result didn't count (same browser or same network on both sides). */

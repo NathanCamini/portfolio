@@ -94,7 +94,7 @@ navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pel
 servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). A partida
 rápida vale **ranking online (Elo)**, gravado pelo servidor no D1, e a fila junta gente de nível parecido. Durante a
 partida há **reações** (teclas 1–6), um **indicador de conexão** dos dois jogadores, e quem abre o link de uma sala
-cheia **assiste** ao vivo. O deploy cria
+cheia **assiste** ao vivo; o botão **Ao vivo** lista as partidas rápidas em andamento para assistir. O deploy cria
 os Durable Objects (salas e fila) sozinho, pelas migrations do `wrangler.jsonc`; previews não têm salas e mostram o online como
 indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de latência), limites, custos e testes:
 **[docs/volei-online.md](docs/volei-online.md)**.

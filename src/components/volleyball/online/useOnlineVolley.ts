@@ -379,6 +379,33 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     [connect, reset],
   );
 
+  /** Straight in as a spectator (the live showcase): no nickname, no seat. */
+  const watch = useCallback(
+    async (code: string) => {
+      const n = net.current;
+      const attempt = ++n.attempt;
+      n.name = '';
+      n.code = code;
+      n.stopped = false;
+      n.watch = true;
+      setStatus('working');
+      setError(null);
+      let why: OnlineErrorKey | null = null;
+      try {
+        const res = await fetch(`/api/volley/rooms/${code}`, { cache: 'no-store' });
+        if (res.status === 404)
+          why = 'room_not_found'; // the match ended (and the room with it) meanwhile
+        else if (!res.ok) why = res.status === 503 ? 'unavailable' : 'network';
+      } catch {
+        why = 'network';
+      }
+      if (attempt !== n.attempt) return;
+      if (why) reset(why);
+      else connect(code);
+    },
+    [connect, reset],
+  );
+
   const create = useCallback(
     async (name: string) => {
       const attempt = ++net.current.attempt;
@@ -628,6 +655,7 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
     create,
     enter,
     quick,
+    watch,
     cancel,
     setReady,
     leave,

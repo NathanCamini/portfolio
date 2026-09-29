@@ -4,6 +4,7 @@ import { Predictor, TickClock } from '../../src/lib/volley-online/predictor';
 import {
   parseServerMessage,
   PROTOCOL_VERSION,
+  type LiveResponse,
   type OnlineRankingResponse,
   type RoomView,
   type ServerMessage,
@@ -215,6 +216,10 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     await a.until((m) => m.t === 'state' && m.s.tick > 120);
     expect([a.errors, b.errors]).toEqual([[], []]);
 
+    // The match shows up in the live showcase while it's on…
+    const live = async () => ((await (await fetch(`${BASE}/api/volley/live`)).json()) as LiveResponse).matches;
+    expect((await live()).find((m) => m.code === codeA)).toMatchObject({ names: ['Fila Um', 'Fila Dois'] });
+
     // B gives up: a forfeit, saved to D1, and both ratings come back with the result.
     b.send({ t: 'leave' });
     await a.until((m) => m.t === 'room' && !!m.room.result?.ratings);
@@ -224,6 +229,8 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     const me = await hashPlayer(a.who.pid!);
     const board = (await (await fetch(`${BASE}/api/volley/ratings?me=${me}`)).json()) as OnlineRankingResponse;
     expect(board.me).toMatchObject({ name: 'Fila Um', rating: mine.after, games: 1, wins: 1 });
+    // …and leaves it when the match ends.
+    expect((await live()).some((m) => m.code === codeA)).toBe(false);
     [a, b].forEach((p) => (p.stop(), p.ws.close()));
   });
 
