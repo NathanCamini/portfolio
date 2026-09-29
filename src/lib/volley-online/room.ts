@@ -28,7 +28,7 @@ import {
  *   waiting ──both ready──▶ countdown ──3 s──▶ playing ──7 points──▶ over
  *      ▲                        │                 │  ▲                  │
  *      └──── un-ready / drop ───┘        drop ────▼  │ back + 3 s       │
- *                                             paused ──15 s──▶ over (W.O.)
+ *                                             paused ──20 s──▶ over (W.O.)
  *   over ──both ready──▶ countdown (rematch)
  */
 
@@ -301,6 +301,25 @@ export class RoomCore {
     this.publish();
   }
 
+  /**
+   * The seat a hello comes back to, if any. The token (per tab) is the sure
+   * way; without it, the browser's id: a player who closed the tab (or the
+   * browser) and opened the link again lost the token but not the id. A
+   * dropped seat wins. A seat still connected (a socket the server hasn't seen
+   * die yet) is only taken over in a full room, and when it is the only one with
+   * that id: two tabs of one browser can still sit down to play each other.
+   */
+  private returning(token?: string, pid?: string): Side | null {
+    const byToken = token ? this.seats.findIndex((s) => s?.token === token) : -1;
+    if (byToken !== -1) return byToken as Side;
+    if (!pid) return null;
+    const mine = ([0, 1] as const).filter((side) => this.seats[side]?.pid === pid);
+    const dropped = mine.find((side) => !this.seats[side]!.conn);
+    if (dropped !== undefined) return dropped;
+    const full = this.seats.every(Boolean);
+    return full && mine.length === 1 ? mine[0] : null;
+  }
+
   /** After hibernation: a spectator's socket. */
   restoreWatcher(conn: Conn) {
     this.watchers.set(conn.id, conn);
@@ -321,8 +340,8 @@ export class RoomCore {
     if (!nick.ok) return this.fail(conn, 'invalid_name');
 
     let side: Side | null = null;
-    const back = token ? this.seats.findIndex((s) => s?.token === token) : -1;
-    if (back !== -1) {
+    const back = this.returning(token, pid);
+    if (back !== null) {
       side = back as Side;
       const seat = this.seats[side]!;
       if (seat.conn && seat.conn !== conn) {
@@ -335,7 +354,8 @@ export class RoomCore {
       seat.name = nick.name;
     } else {
       side = !this.seats[0] ? 0 : !this.seats[1] ? 1 : null;
-      if (side === null) return this.fail(conn, 'room_full');
+      // Full: a friend opening the link (or a player whose seat is gone) watches instead.
+      if (side === null) return this.watch(conn, version);
       this.seats[side] = {
         name: nick.name,
         token: this.host.randomToken(),

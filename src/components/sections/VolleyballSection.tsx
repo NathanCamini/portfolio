@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Magnetic } from '@/components/fun/Magnetic';
 import { EASE_OUT_SOFT } from '@/components/motion/easing';
 import { Reveal } from '@/components/motion/Reveal';
-import { roomFromHash } from '@/components/volleyball/online/link';
+import { activeRoom, roomFromHash } from '@/components/volleyball/online/link';
 import { VolleyballGame } from '@/components/volleyball/VolleyballGame';
 import { VolleyTeaser } from '@/components/volleyball/VolleyTeaser';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -61,6 +61,15 @@ export function VolleyballSection() {
       openRef.current();
     };
     onHash();
+    // No link, but this browser left a match without leaving it (closed the tab, the phone killed the page):
+    // back to it while the seat is held.
+    if (!roomFromHash(location.hash)) {
+      void activeRoom().then((code) => {
+        if (!code || roomFromHash(location.hash)) return;
+        setJoinCode(code);
+        openRef.current();
+      });
+    }
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);

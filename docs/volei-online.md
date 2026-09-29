@@ -123,7 +123,7 @@ O modo contra a CPU continua idêntico, e os testes de dificuldade do motor segu
 | `GET /api/volley/live`        | `200 { matches }`: até 10 partidas rápidas em andamento, as mais assistidas primeiro. `503` sem D1.      |
 
 O pré-teste por HTTP existe porque um WebSocket recusado não diz o motivo ao navegador. Com ele, a página mostra
-"sala não encontrada", "sala cheia" ou "online indisponível".
+"sala não encontrada" ou "online indisponível".
 
 **Códigos de sala:** 5 caracteres de `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (sem I, L, O, 0 e 1, que se confundem ao ditar
 ou digitar no celular). São 28,6 milhões de combinações sorteadas com o gerador criptográfico da plataforma. Uma
@@ -177,16 +177,16 @@ bit a bit. A 60 por segundo, são uns 4 KB/s por jogador. O resto das mensagens 
  waiting ──os dois prontos──▶ countdown ──3 s──▶ playing ──7 pontos──▶ over
     ▲                             │                │  ▲                  │
     └──── cancelou / caiu ────────┘          caiu ─▼  │ voltou + 3 s     │
-                                                 paused ──15 s──▶ over (W.O.)
+                                                 paused ──20 s──▶ over (W.O.)
  over ──os dois prontos──▶ countdown (revanche: quem perdeu saca)
 ```
 
-- **Cadeiras:** duas. Um terceiro recebe `room_full`. Nomes seguem as regras do ranking (3–16 caracteres, filtro de
+- **Cadeiras:** duas. Um terceiro vira espectador (ver [Espectadores](#reações-espectadores-e-conexão)). Nomes seguem as regras do ranking (3–16 caracteres, filtro de
   palavrões, reservados como "bot" e "cpu"), checadas no navegador e de novo no servidor.
 - **Primeiro saque:** sorteio. Revanche: quem perdeu saca.
 - **Saiu no meio da partida** (botão, fechou o painel ou trocou de aba): vitória do outro por W.O.
-- **Caiu no meio da partida:** a partida **pausa** e a cadeira fica guardada por 15 s. Ver [Reconexão](#reconexão).
-- **Caiu no lobby:** a cadeira também fica guardada por 15 s (um F5 não perde o lugar); depois é liberada.
+- **Caiu no meio da partida:** a partida **pausa** e a cadeira fica guardada por 20 s. Ver [Reconexão](#reconexão).
+- **Caiu no lobby:** a cadeira também fica guardada por 20 s (um F5 não perde o lugar); depois é liberada.
 - **Sala vazia:** um alarme apaga a sala 2 h depois de criada se ninguém estiver conectado; senão, confere de novo
   depois de mais 2 h.
 
@@ -256,9 +256,10 @@ para todo mundo e o navegador mostra um balão sobre o jogador por 2,2 s. Quem r
 esquerda); o espectador vê cada um sobre o seu lado da quadra. Só jogadores reagem, e no máximo uma vez a cada 1,5 s
 (o resto é descartado sem erro): não dá para inundar a tela do outro.
 
-**Espectadores.** Quem abre o link de uma sala **cheia** assiste em vez de ver "sala cheia":
+**Espectadores.** Quem abre o link de uma sala **cheia** (e não tem cadeira nela) assiste:
 
-- entra com `hello { watch: true }` e recebe `watching { room }`, depois os mesmos snapshots e reações dos jogadores;
+- entra com `hello { watch: true }` (a vitrine) ou com um `hello` normal numa sala cheia (o link), e recebe
+  `watching { room }`, depois os mesmos snapshots e reações dos jogadores;
 - não joga nem reage: fora `ping` e `leave`, qualquer mensagem de espectador fecha o socket com `bad_message`;
 - não prevê nada: o `SnapshotBuffer` (`spectator.ts`) desenha **um snapshot atrás**, deslizando entre os dois
   últimos (a 60 por segundo, ~17 ms de atraso), e mostra na hora os saltos grandes (o reinício do saque);
@@ -406,12 +407,25 @@ até você. O repasse (`opp`) e os 60 snapshots/s cortam 35–60% do erro da bol
   da aba por sala. Um `hello` com esse token volta para a mesma cadeira.
   - `sessionStorage` é por aba: duas abas do mesmo navegador são dois jogadores diferentes, útil para testar.
   - Um F5 mantém o token.
+- **Sem o token, pelo id do navegador.** Fechar a aba (ou o navegador, ou o celular matar a página) apaga o
+  `sessionStorage`, e antes disso a volta pelo link caía como um terceiro: "sala cheia". Agora o `hello` também leva
+  o `pid` (o id do navegador no `localStorage`, o mesmo do ranking), e o servidor devolve a cadeira que tem esse id:
+  - primeiro a que caiu (sem socket);
+  - depois, numa sala cheia, uma ainda conectada, se só ela tem esse id: é um socket que o servidor ainda não viu
+    morrer (a rede caiu sem avisar), e ele recebe `replaced`;
+  - duas abas do mesmo navegador jogando entre si continuam dois jogadores: com cadeira livre, a segunda aba senta
+    nela; com as duas ocupadas pelo mesmo id, uma terceira aba assiste.
+- **Reabrir o site.** No `welcome`, a página guarda o código da sala em `localStorage` (`volley-online:active`),
+  que sobrevive a fechar a aba. Ao abrir o site sem link, se esse código existe e a sala está em partida
+  (`countdown`, `playing` ou `paused`, pelo `GET /api/volley/rooms/:code`), o painel abre sozinho na aba online e
+  volta para a cadeira. O código é apagado ao sair, no fim da partida, e quando o servidor recusa; uma sala que
+  já acabou ou sumiu também o apaga.
 - **Caiu no meio da partida.** O servidor:
   1. para o relógio da partida;
   2. manda a todos o **estado exato em que parou**;
   3. mostra ao outro jogador "Fulano caiu. Esperando voltar…", com os segundos restantes.
 
-  A página de quem caiu tenta de novo sozinha (300 ms, 0,7 s, 1,5 s, 2,5 s, 4 s, 7 s: um pouco mais que os 15 s da
+  A página de quem caiu tenta de novo sozinha (300 ms, 0,7 s, 1,5 s, 2,5 s, 4 s, 5 s, 7 s: um pouco mais que os 20 s da
   cadeira). Quando os dois estão de volta: contagem "Volta em 3" e a partida continua de onde parou, sem nenhuma
   rajada de física pelo tempo pausado.
 
@@ -421,7 +435,7 @@ até você. O repasse (`opp`) e os 60 snapshots/s cortam 35–60% do erro da bol
 - **Mesma pessoa em duas abas:** a mais nova fica com a cadeira, e a antiga recebe "Você abriu esta sala em outra aba".
 - **Hibernação.** No lobby parado, o objeto pode sair da memória sem derrubar os sockets (API de hibernação de
   WebSocket). Cada socket carrega a própria cadeira num _attachment_ serializado, e o lobby está no armazenamento. Ao
-  acordar, o objeto remonta a sala igual; timers não sobrevivem, então cadeiras vazias ganham um novo prazo de 15 s.
+  acordar, o objeto remonta a sala igual; timers não sobrevivem, então cadeiras vazias ganham um novo prazo de 20 s.
 
 ## Segurança e limites
 
@@ -507,11 +521,14 @@ npx vitest run src/lib/volley-online worker    # só o online
   varridas) e a rota `GET /api/volley/live` (`200`, e `503` sem D1).
 - `worker/test/volley.test.ts`: as rotas (criação, colisão de código, `403`/`429`/`503`, encaminhamento do upgrade,
   pré-teste), da sala e da fila.
+- `room.test.ts` (volta sem token): quem fechou a aba volta pelo id para a mesma cadeira e a partida continua
+  (um estranho, no mesmo momento, só assiste); cadeira com socket-fantasma assumida numa sala cheia; duas abas do
+  mesmo navegador ainda sentam uma contra a outra; o prazo é de 20 s.
 - `link.test.ts`: o link da sala e a leitura do `#volei-CÓDIGO`.
 - `worker/test/online.e2e.test.ts`: **partida real** contra o `wrangler dev`, com o Durable Object de verdade e
   WebSockets de verdade. Dois bots usam o mesmo `Predictor` e o mesmo `TickClock` do navegador, jogam até 7, um
-  deles cai e volta no meio; outros dois se encontram pela partida rápida, jogam, um desiste e o ranking do D1
-  registra a vitória e a derrota (e a sala aparece em `/api/volley/live` durante a partida e some depois); um terceiro jogador é recusado e
+  deles cai e volta no meio (com o token); outro cai, perde o token e volta pelo id do navegador; outros dois se encontram pela partida rápida, jogam, um desiste e o ranking do D1
+  registra a vitória e a derrota (e a sala aparece em `/api/volley/live` durante a partida e some depois); um terceiro vira espectador e
   uma sala inexistente não abre; um espectador assiste uma partida real (~60 snapshots/s) e vê a reação de um
   jogador. Leva ~2 minutos
   e só roda quando pedido:
@@ -551,6 +568,13 @@ E a vitrine, com três pessoas (desktop jogando uma partida rápida contra um bo
 - com a partida em andamento, o botão mostra "Live 1" e a lista "Robo Rival 0 × 0 Nathan · Watch";
 - Watch leva direto à tela de espectador (👁 1 para os jogadores);
 - quando o bot sai, o espectador vê "Nathan wins".
+
+E a volta depois de fechar a aba (desktop numa partida rápida contra um bot):
+
+- fechar a aba no meio da partida: o bot vê a pausa ("Se não voltar em 20s, a vitória é sua");
+- abrir o site de novo, sem link: o painel abre sozinho, "Volta em 3", e a mesma partida continua;
+- fechar de novo e abrir pelo link numa aba nova: volta para a cadeira, não para a plateia nem para "sala cheia";
+- o bot some: vitória por W.O. depois de 20 s, e o código guardado é apagado.
 
 Nenhum erro no console.
 
