@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HUMAN, playerBot } from './bot';
 import { CPU, FIELD, TIMING } from './constants';
 import { createGame, primaryAction, stepGame } from './physics';
-import { nextStage, STAGES } from './stages';
+import { nextStage } from './stages';
 import type { GameState, Input } from './types';
 
 const idle: Input = { left: false, right: false, jump: false };
@@ -32,7 +32,7 @@ describe('beach volleyball engine', () => {
   });
 
   it('drops the serve after the timeout and the rally goes live', () => {
-    const g = createGame('endless', seeded());
+    const g = createGame('easy', seeded());
     primaryAction(g);
     // Move the player away so they don't touch the hovering ball.
     play(g, 0.5, { ...idle, left: true });
@@ -42,7 +42,7 @@ describe('beach volleyball engine', () => {
   });
 
   it('awards the point to the CPU when the ball lands on the player side', () => {
-    const g = createGame('endless', seeded());
+    const g = createGame('easy', seeded());
     primaryAction(g);
     play(g, 3, { ...idle, left: true }); // player hides in the corner, ball drops on their side
     expect(g.score).toEqual([0, 1]);
@@ -80,7 +80,7 @@ describe('beach volleyball engine', () => {
   });
 });
 
-describe('campaign and endless', () => {
+describe('campaign', () => {
   it('only a win in phase 1 leads to the boss; losing replays the same phase', () => {
     const g = createGame('easy', seeded());
     primaryAction(g);
@@ -101,31 +101,7 @@ describe('campaign and endless', () => {
 
   it('beating the boss ends the campaign on a rematch', () => {
     expect(nextStage('boss', true)).toBe('boss');
-    expect(nextStage('endless', false)).toBe('endless');
-  });
-
-  it('endless has no limit for the player and ends when the CPU reaches 7', () => {
-    const g = createGame('endless', seeded());
-    primaryAction(g);
-    Object.assign(g, { score: [12, 6], phase: 'point', phaseTime: TIMING.POINT_PAUSE_MS, lastScorer: 0 });
-    stepGame(g, TIMING.STEP, idle, seeded());
-    expect(g.phase).toBe('serve');
-    finish(g, [12, 7]);
-    primaryAction(g);
-    expect([g.stage.id, g.phase, g.score]).toEqual(['endless', 'serve', [0, 0]]);
-  });
-
-  it('endless is played against the original CPU', () => {
-    expect(STAGES.endless.cpu).toEqual({
-      speed: 5.4,
-      jump: -12.5,
-      jumpChance: 0.08,
-      offset: 16,
-      misreadChance: 0,
-      misread: 0,
-      radius: 44,
-      spike: 0,
-    });
+    expect(nextStage('boss', false)).toBe('boss');
   });
 });
 

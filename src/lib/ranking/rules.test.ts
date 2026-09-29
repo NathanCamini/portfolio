@@ -9,54 +9,13 @@ import {
   targetGeometry,
   update,
 } from '../../components/siege/engine';
-import { HUMAN, playerBot } from '../../components/volleyball/engine/bot';
-import { TIMING } from '../../components/volleyball/engine/constants';
-import { createGame, primaryAction, stepGame } from '../../components/volleyball/engine/physics';
 import { RANKING } from './contract';
-import { peekMaxScore, RULES, VOLLEY_MIN_MS_PER_POINT, type PeekResult } from './rules';
+import { peekMaxScore, RULES, type PeekResult } from './rules';
 
 const seeded =
   (seed = 1) =>
   () =>
     ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-
-const LONG_AGO = RANKING.MATCH_TTL_MS; // server clock: plenty of time has passed
-
-describe('volley (endless) rules', () => {
-  const check = RULES.volley.check;
-
-  it('accepts runs whose clock fits the rally count', () => {
-    expect(check({ points: 0, durationMs: 7 * VOLLEY_MIN_MS_PER_POINT }, LONG_AGO)).toBeNull();
-    expect(check({ points: 25, durationMs: 32 * VOLLEY_MIN_MS_PER_POINT }, LONG_AGO)).toBeNull();
-  });
-
-  it('rejects malformed numbers', () => {
-    expect(RULES.volley.parse({ points: '3', durationMs: 1 })).toBeNull();
-    expect(check({ points: -1, durationMs: 60_000 }, LONG_AGO)).toBe('invalid_result');
-    expect(check({ points: 1.5, durationMs: 60_000 }, LONG_AGO)).toBe('invalid_result');
-    expect(check({ points: 3, durationMs: RANKING.MATCH_TTL_MS + 1 }, LONG_AGO)).toBe('invalid_result');
-  });
-
-  it("rejects more points than the clock allows — the CPU's 7 count too", () => {
-    expect(check({ points: 0, durationMs: 7 * VOLLEY_MIN_MS_PER_POINT - 1 }, LONG_AGO)).toBe('too_fast');
-    expect(check({ points: 100, durationMs: 60_000 }, LONG_AGO)).toBe('too_fast');
-  });
-
-  it('rejects a clock longer than the server has known about the run', () => {
-    expect(check({ points: 5, durationMs: 60_000 }, 60_000 - RANKING.CLOCK_SLACK_MS - 1)).toBe('too_fast');
-  });
-
-  it('never rejects a real run', () => {
-    const g = createGame('endless', seeded(3));
-    primaryAction(g);
-    const rng = seeded(4);
-    const bot = playerBot(HUMAN, seeded(5));
-    while (g.phase !== 'over') stepGame(g, TIMING.STEP, bot(g, TIMING.STEP * 60), rng);
-    const result = { points: g.score[0], durationMs: Math.round(g.matchTime) };
-    expect(check(result, result.durationMs)).toBeNull();
-    expect(RULES.volley.score(result)).toBe(g.score[0]);
-  });
-});
 
 describe('peek trainer rules', () => {
   const check = RULES.peek.check;

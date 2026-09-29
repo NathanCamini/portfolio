@@ -1,12 +1,13 @@
 import type { NameProblem } from './nickname';
 
 /**
- * The global ranking, shared by every mini-game: one API, one database, one
- * name filter and one UI. Each game has its own board (scores aren't
- * comparable) and plugs in its own result rules (rules.ts). Adding a game is
- * one entry here and one in rules.ts.
+ * The global ranking: one API, one database, one name filter and one UI,
+ * built for several games, each with its own board (scores aren't comparable)
+ * and its own result rules (rules.ts). Today it has one, the Peek Trainer: the
+ * volleyball Endless board moved to the game's own site (NathanCamini/volleyball_game).
+ * Adding a game is one entry here and one in rules.ts.
  */
-export const GAMES = ['volley', 'peek'] as const;
+export const GAMES = ['peek'] as const;
 export type GameId = (typeof GAMES)[number];
 export const isGame = (value: string): value is GameId => (GAMES as readonly string[]).includes(value);
 
@@ -15,7 +16,7 @@ export const RANKING = {
   TOP: 10,
   /** The browser starts its clock a network round-trip before the server does. */
   CLOCK_SLACK_MS: 5_000,
-  /** A kickoff ticket is only good for this long (a strong Endless run can last a while). */
+  /** A kickoff ticket is only good for this long. */
   MATCH_TTL_MS: 3 * 60 * 60 * 1000,
 } as const;
 

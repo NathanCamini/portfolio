@@ -19,7 +19,6 @@ export const PERFECT: BotSkill = { reactionMs: 0, aimNoise: 0 };
 /**
  * A typical player: re-reads the ball every quarter second (average visual
  * reaction time) and misjudges a ball in flight for a second by ~20 px.
- * Against the original CPU (Endless) it wins about half of its matches.
  */
 export const HUMAN: BotSkill = { reactionMs: 250, aimNoise: 0.3 };
 

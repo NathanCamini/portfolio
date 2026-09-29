@@ -1,6 +1,4 @@
 import { hitPoints, MAX_TARGETS, ROUND_MS } from '../../components/siege/engine';
-import { TIMING } from '../../components/volleyball/engine/constants';
-import { gameConfig } from '../../config/game';
 import { RANKING, type GameId, type ResultProblem } from './contract';
 
 /**
@@ -10,13 +8,6 @@ import { RANKING, type GameId, type ResultProblem } from './contract';
  * Basic anti-cheat — it stops tampering with the request, not a patient
  * forger who sends a plausible result.
  */
-
-/** Beach volley, Endless: points scored before the CPU reached its limit, and the run clock. */
-export interface VolleyResult {
-  points: number;
-  /** Simulated time from the first serve to the final whistle (fixed-step engine clock). */
-  durationMs: number;
-}
 
 /** Peek Trainer: one 30-second round. */
 export interface PeekResult {
@@ -28,7 +19,6 @@ export interface PeekResult {
 }
 
 export interface GameResults {
-  volley: VolleyResult;
   peek: PeekResult;
 }
 
@@ -54,29 +44,6 @@ function numbers<K extends string>(raw: unknown, keys: readonly K[]): Record<K, 
   }
   return out;
 }
-
-// ---- Beach volley (Endless) ----
-
-/**
- * No point can be faster than the serve hover plus the pause after it — the
- * ball can't be reached while it hovers. The real minimum is higher (the ball
- * still has to fall), so this lower bound never rejects a real run.
- */
-export const VOLLEY_MIN_MS_PER_POINT = TIMING.SERVE_AUTO_DROP_MS + TIMING.POINT_PAUSE_MS;
-
-const volley: GameRules<VolleyResult> = {
-  parse: (raw) => numbers(raw, ['points', 'durationMs'] as const),
-  check({ points, durationMs }, elapsedMs) {
-    if (!isCount(points) || !isCount(durationMs) || durationMs > RANKING.MATCH_TTL_MS) return 'invalid_result';
-    // Every point — the player's and the CPU's — takes a minimum of game time…
-    if (durationMs < (points + gameConfig.endlessCpuScore) * VOLLEY_MIN_MS_PER_POINT) return 'too_fast';
-    // …and the game clock can't have run longer than the server has known about the run.
-    if (durationMs > elapsedMs + RANKING.CLOCK_SLACK_MS) return 'too_fast';
-    return null;
-  },
-  score: (r) => r.points,
-  detail: (r) => ({ durationMs: r.durationMs }),
-};
 
 // ---- Peek Trainer ----
 
@@ -110,4 +77,4 @@ const peek: GameRules<PeekResult> = {
   detail: (r) => ({ hits: r.hits, shots: r.shots, headshots: r.headshots, bestStreak: r.bestStreak }),
 };
 
-export const RULES: { [G in GameId]: GameRules<GameResults[G]> } = { volley, peek };
+export const RULES: { [G in GameId]: GameRules<GameResults[G]> } = { peek };

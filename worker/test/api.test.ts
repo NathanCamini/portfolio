@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ROUND_MS } from '../../src/components/siege/engine';
 import { RANKING, type GameId, type SubmitResponse, type TopResponse } from '../../src/lib/ranking/contract';
-import { VOLLEY_MIN_MS_PER_POINT, type PeekResult } from '../../src/lib/ranking/rules';
+import type { PeekResult } from '../../src/lib/ranking/rules';
 import worker, { type Env } from '../index';
 import { createD1 } from './d1';
 
@@ -29,16 +28,6 @@ const kickoff = async (game: GameId) =>
 const submit = (game: GameId, matchId: string, name: string, result: unknown) =>
   call('POST', `/api/ranking/${game}/scores`, { matchId, name, result });
 
-/** Shortest clock an Endless run with these points can have: the player's points plus the CPU's 7. */
-const fastest = (points: number) => (points + 7) * VOLLEY_MIN_MS_PER_POINT;
-
-/** Kickoff, let the server clock run as long as the run, save. */
-async function volley(name: string, points: number, durationMs = fastest(points) + 1000) {
-  const id = await kickoff('volley');
-  wait(durationMs);
-  return submit('volley', id, name, { points, durationMs });
-}
-
 const round = (score: number, extra: Partial<PeekResult> = {}): PeekResult => ({
   score,
   shots: 40,
@@ -61,40 +50,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe('ranking API — shared by every game', () => {
-  it('creates its tables on first use and starts with empty boards', async () => {
-    expect(await board('volley')).toEqual([]);
+describe('ranking API', () => {
+  it('creates its tables on first use and starts with an empty board', async () => {
     expect(await board('peek')).toEqual([]);
-  });
-
-  it('carries the existing Endless board over from the volleyball-only tables', async () => {
-    const sql = (file: string) =>
-      readFileSync(new URL(`../../migrations/${file}`, import.meta.url), 'utf8')
-        .replace(/--[^\n]*/g, '')
-        .split(';')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    const db = env.DB!;
-    await db.batch([...sql('0001_volley_ranking.sql'), ...sql('0002_volley_endless.sql')].map((s) => db.prepare(s)));
-    await db.batch([
-      db.prepare(
-        `INSERT INTO volley_endless (match_id, name, name_key, points, duration_ms, created_at)
-         VALUES ('m1', 'Ana', 'ana', 12, 60000, 1), ('m2', 'Bruno', 'bruno', 12, 70000, 2)`,
-      ),
-    ]);
-    expect(await board('volley')).toEqual([
-      { name: 'Ana', score: 12, detail: { durationMs: 60000 }, at: 1 },
-      { name: 'Bruno', score: 12, detail: { durationMs: 70000 }, at: 2 },
-    ]);
-    expect(await board('peek')).toEqual([]);
-  });
-
-  it('saves an Endless run, ranked by points', async () => {
-    const res = await volley('  Ana   Clara ', 12, 60_000);
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as SubmitResponse;
-    expect(body).toMatchObject({ score: 12, best: 12, personalBest: true, position: 1 });
-    expect(body.top).toEqual([{ name: 'Ana Clara', score: 12, detail: { durationMs: 60_000 }, at: Date.now() }]);
   });
 
   it('saves a Peek Trainer round, ranked by its score', async () => {
@@ -107,23 +65,16 @@ describe('ranking API — shared by every game', () => {
     });
   });
 
-  it('keeps one board per game, with the same player name on both', async () => {
-    await volley('Ana', 20);
-    await peek('ana', round(1000));
-    await peek('Bruno', round(1500));
-    expect((await board('volley')).map((e) => e.name)).toEqual(['Ana']);
-    expect((await board('peek')).map((e) => [e.name, e.score])).toEqual([
-      ['Bruno', 1500],
-      ['ana', 1000],
-    ]);
+  it("no longer serves the volleyball board: it moved to the game's own site", async () => {
+    expect((await call('GET', '/api/ranking/volley')).status).toBe(404);
+    expect((await call('POST', '/api/ranking/volley/matches')).status).toBe(404);
   });
 
-  it("only accepts a ticket for the game that issued it, once, while it's fresh", async () => {
-    const id = await kickoff('volley');
+  it("only accepts a ticket once, while it's fresh", async () => {
+    const id = await kickoff('peek');
     wait(ROUND_MS + 2000);
+    expect((await submit('peek', id, 'Ana', round(100))).status).toBe(201);
     expect((await submit('peek', id, 'Ana', round(100))).status).toBe(404);
-    expect((await submit('volley', id, 'Ana', { points: 1, durationMs: fastest(1) })).status).toBe(201);
-    expect((await submit('volley', id, 'Ana', { points: 1, durationMs: fastest(1) })).status).toBe(404);
 
     const stale = await kickoff('peek');
     wait(RANKING.MATCH_TTL_MS + 1);
@@ -146,7 +97,7 @@ describe('ranking API — shared by every game', () => {
     expect((await submit('peek', id, 'Ana', round(900))).status).toBe(201);
   });
 
-  it("checks each game's result with that game's rules", async () => {
+  it("checks the result with the game's rules", async () => {
     const expectError = async (res: Response, error: string) => {
       expect(res.status).toBe(422);
       expect(((await res.json()) as { error: string }).error).toBe(error);
@@ -160,15 +111,10 @@ describe('ranking API — shared by every game', () => {
     await expectError(await submit('peek', early, 'Ana', round(99_999)), 'invalid_result');
     expect((await submit('peek', early, 'Ana', round(900))).status).toBe(201);
 
-    // Volley: points the clock can't account for.
-    const run = await kickoff('volley');
-    wait(60_000);
-    await expectError(await submit('volley', run, 'Ana', { points: 100, durationMs: 60_000 }), 'too_fast');
-    await expectError(await submit('volley', run, 'Ana', { points: -1, durationMs: 60_000 }), 'invalid_result');
-
     // Malformed results are bad requests.
-    expect((await submit('volley', run, 'Ana', { points: '3' })).status).toBe(400);
-    expect((await submit('peek', early, 'Ana', 'nope')).status).toBe(400);
+    const other = await kickoff('peek');
+    wait(ROUND_MS);
+    expect((await submit('peek', other, 'Ana', 'nope')).status).toBe(400);
   });
 
   it("keeps each player's best, merging case and accents, ties to whoever was first", async () => {
@@ -212,6 +158,6 @@ describe('ranking API — shared by every game', () => {
     expect((await call('POST', '/api/ranking/peek/matches')).status).toBe(429);
 
     delete env.DB; // e.g. a preview deployment
-    expect(await (await call('GET', '/api/ranking/volley')).json()).toEqual({ error: 'unavailable' });
+    expect(await (await call('GET', '/api/ranking/peek')).json()).toEqual({ error: 'unavailable' });
   });
 });

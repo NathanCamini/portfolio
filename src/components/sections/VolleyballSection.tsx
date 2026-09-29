@@ -5,11 +5,12 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Magnetic } from '@/components/fun/Magnetic';
 import { EASE_OUT_SOFT } from '@/components/motion/easing';
 import { Reveal } from '@/components/motion/Reveal';
-import { activeRoom, roomFromHash } from '@/components/volleyball/online/link';
+import { PlayOnline } from '@/components/volleyball/PlayOnline';
 import { VolleyballGame } from '@/components/volleyball/VolleyballGame';
 import { VolleyTeaser } from '@/components/volleyball/VolleyTeaser';
 import { useI18n } from '@/i18n/I18nProvider';
 import { celebrate, originOf } from '@/lib/confetti';
+import { gameLink, roomFromHash } from '@/lib/game-link';
 import { scrollToElement } from '@/lib/scroll';
 import { OPEN_VOLLEYBALL } from '@/lib/volleyball';
 import styles from './VolleyballSection.module.css';
@@ -21,13 +22,14 @@ const PANEL_ID = 'volleyball-game';
  * poster, a pulsing Play button and a floating shortcut elsewhere on the page
  * (VolleyFab). Opening expands the same game panel as before (height 0 → auto,
  * 650 ms) and scrolls it into view. The game is only mounted while open.
- * A room link (`#volei-CODE`, docs/volei-online.md) opens it on the online tab.
+ * The panel plays the campaign; online 1×1, Endless and the rankings are the
+ * full game's (its own site), linked from here and from the panel. Old room
+ * links (`#volei-CODE`, from when the online game lived here) go there.
  */
 export function VolleyballSection() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const vb = t.volleyball;
   const [open, setOpen] = useState(false);
-  const [joinCode, setJoinCode] = useState<string | null>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const reduce = useReducedMotion();
 
@@ -52,27 +54,16 @@ export function VolleyballSection() {
     return () => window.removeEventListener(OPEN_VOLLEYBALL, onOpen);
   }, []);
 
-  // A room link, on arrival or pasted into this tab's address bar: the online tab, on that room.
+  // An old room link, on arrival or pasted into the address bar: the room lives in the full game now.
   useEffect(() => {
     const onHash = () => {
       const code = roomFromHash(location.hash);
-      if (!code) return;
-      setJoinCode(code);
-      openRef.current();
+      if (code) location.replace(gameLink(locale, code));
     };
     onHash();
-    // No link, but this browser left a match without leaving it (closed the tab, the phone killed the page):
-    // back to it while the seat is held.
-    if (!roomFromHash(location.hash)) {
-      void activeRoom().then((code) => {
-        if (!code || roomFromHash(location.hash)) return;
-        setJoinCode(code);
-        openRef.current();
-      });
-    }
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [locale]);
 
   const close = () => {
     setOpen(false);
@@ -92,20 +83,24 @@ export function VolleyballSection() {
             </span>
             <h3 className={styles.title}>{vb.title}</h3>
             <p className={styles.body}>{vb.body}</p>
-            <Magnetic strength={0.4}>
-              <button
-                ref={toggleRef}
-                type="button"
-                className={`${styles.play} ${open ? styles.playOpen : ''}`}
-                aria-expanded={open}
-                aria-controls={PANEL_ID}
-                onClick={(e) => (open ? close() : openGame(e.currentTarget))}
-              >
-                {!open && <span className={styles.pulse} aria-hidden="true" />}
-                <span aria-hidden="true">{open ? '✕' : '▶'}</span>
-                {open ? vb.closeBtn : vb.play}
-              </button>
-            </Magnetic>
+            <div className={styles.ctas}>
+              <Magnetic strength={0.4}>
+                <button
+                  ref={toggleRef}
+                  type="button"
+                  className={`${styles.play} ${open ? styles.playOpen : ''}`}
+                  aria-expanded={open}
+                  aria-controls={PANEL_ID}
+                  onClick={(e) => (open ? close() : openGame(e.currentTarget))}
+                >
+                  {!open && <span className={styles.pulse} aria-hidden="true" />}
+                  <span aria-hidden="true">{open ? '✕' : '▶'}</span>
+                  {open ? vb.closeBtn : vb.play}
+                </button>
+              </Magnetic>
+              <PlayOnline className={`btn btn-secondary ${styles.online}`}>{vb.online}</PlayOnline>
+            </div>
+            <p className={styles.onlineHint}>{vb.onlineHint}</p>
           </div>
 
           <button
@@ -130,8 +125,7 @@ export function VolleyballSection() {
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.65, ease: EASE_OUT_SOFT }}
           >
-            {/* A new room link remounts the panel on it. */}
-            <VolleyballGame key={joinCode ?? 'local'} id={PANEL_ID} onClose={close} joinCode={joinCode} />
+            <VolleyballGame id={PANEL_ID} onClose={close} />
           </motion.div>
         )}
       </AnimatePresence>

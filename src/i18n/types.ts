@@ -1,5 +1,4 @@
 import type { GameId } from '@/lib/ranking/contract';
-import type { ErrorCode } from '@/lib/volley-online/protocol';
 
 /**
  * Shape of a translation dictionary. Every locale file must satisfy this
@@ -68,7 +67,7 @@ export interface GameStrings {
   pCpu: string;
   pBoss: string;
   /** Title screen of each stage. */
-  stages: Record<'easy' | 'boss' | 'endless', { title: string; sub: string }>;
+  stages: Record<'easy' | 'boss', { title: string; sub: string }>;
   /** Phase 1 lost. */
   lose: string;
   retry: string;
@@ -78,89 +77,6 @@ export interface GameStrings {
   bossWin: string;
   bossLose: string;
   rematch: string;
-  /** `{n}` = points scored before the CPU reached its limit. */
-  endlessOver: string;
-  again: string;
-  /** Online match: the opponent scored. `{name}` = the opponent. */
-  onlinePoint: string;
-}
-
-/** What can go wrong online, as the page explains it (docs/volei-online.md). */
-export type OnlineErrorKey = ErrorCode | 'network';
-
-/** The online 1v1 lobby around the canvas (components/volleyball/online). */
-export interface OnlineStrings {
-  title: string;
-  intro: string;
-  nameLabel: string;
-  namePlaceholder: string;
-  create: string;
-  /** Quick match: a random opponent from the queue. */
-  quick: string;
-  searching: string;
-  searchingHint: string;
-  cancel: string;
-  /** The quick-match lobby, until the opponent shows up. */
-  found: string;
-  /** Online ranking (Elo): quick matches count, rooms with a friend don't. */
-  ranking: string;
-  rankingHelp: string;
-  rankingEmpty: string;
-  back: string;
-  /** `{n}` = position on the board. */
-  position: string;
-  /** `{wins}` of `{games}` matches won ("3/5 wins"). */
-  record: string;
-  rated: string;
-  friendly: string;
-  /** Spectators (a full room): the header, the lobby line, the audience count `{n}`, the pause hint `{n}` s. */
-  watching: string;
-  watchingHint: string;
-  spectators: string;
-  pausedWatch: string;
-  /** The live showcase: button, title, help, empty list, the watch button, a paused match's tag. */
-  live: string;
-  liveTitle: string;
-  liveHelp: string;
-  liveEmpty: string;
-  watch: string;
-  livePaused: string;
-  /** The reactions bar (keys 1–6). */
-  reactions: string;
-  /** A rated room whose result didn't count (same browser or same network on both sides). */
-  notCounted: string;
-  /** `{after}` = new rating, `{delta}` = signed change ("+16"). */
-  ratingChange: string;
-  or: string;
-  codeLabel: string;
-  join: string;
-  working: string;
-  room: string;
-  share: string;
-  copy: string;
-  copied: string;
-  you: string;
-  waitingSeat: string;
-  offline: string;
-  readyTag: string;
-  ready: string;
-  unready: string;
-  /** `{name}` = the opponent. */
-  waitingOther: string;
-  startsIn: string;
-  resumesIn: string;
-  paused: string;
-  /** `{n}` = seconds left. */
-  pausedHint: string;
-  reconnecting: string;
-  won: string;
-  lost: string;
-  byForfeit: string;
-  series: string;
-  again: string;
-  leave: string;
-  ping: string;
-  errors: Record<OnlineErrorKey, string>;
 }
 
 /** Global ranking, shared by every game: the name form after a run and the top 10 boards. */
@@ -292,10 +208,14 @@ export interface Dictionary {
     play: string;
     fab: string;
     teaserAlt: string;
-    /** Toolbar switch between the campaign and Endless. */
-    mode: { label: string; campaign: string; endless: string; online: string };
     game: GameStrings;
-    online: OnlineStrings;
+    /** Link to the full game (its own site): online 1×1, Endless, rankings. */
+    online: string;
+    /** Under the section's buttons: what the full game has. */
+    onlineHint: string;
+    /** Card over the court after the boss match, pointing at the full game. */
+    more: string;
+    moreCta: string;
   };
   games: {
     label: string;

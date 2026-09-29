@@ -202,3 +202,21 @@
     animation: none;
   }
 }
+
+/* Play (the campaign, here) and the full game (online, Endless, rankings) on its own site. */
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.online {
+  text-decoration: none;
+}
+
+.onlineHint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--color-neutral-400);
+}

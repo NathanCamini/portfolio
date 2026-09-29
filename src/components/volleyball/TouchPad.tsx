@@ -10,7 +10,7 @@ interface Props {
   release: (k: GameKey) => void;
 }
 
-/** On-screen buttons for touch devices, under the court (the local and the online game share them). */
+/** On-screen buttons for touch devices, under the court. */
 export function TouchPad({ labels, press, release }: Props) {
   const hold = (k: GameKey) => ({
     onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {

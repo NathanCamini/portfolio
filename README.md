@@ -2,9 +2,9 @@
 
 Landing page bilíngue (PT/EN) de um desenvolvedor back-end, construída a partir do design **Nocturne**:
 biografia, projetos (passados e futuros) e hobbies — laboratório de IA, um **Porsche 911 GT3 RS em Three.js** guiado
-pelo scroll, um **mini-jogo de vôlei de praia** (campanha com chefe, modo endless e **online 1×1 em tempo real**) e
-um **Peek Trainer** no estilo Rainbow Six Siege — os dois com um **ranking global compartilhado** (Cloudflare
-Workers + D1).
+pelo scroll, um **mini-jogo de vôlei de praia** (a campanha de 2 fases, com chefe) e um **Peek Trainer** no estilo
+Rainbow Six Siege, com **ranking global** (Cloudflare Workers + D1). O vôlei completo (online 1×1 em tempo real, modo
+endless, rankings) virou um projeto próprio: [NathanCamini/volleyball_game](https://github.com/NathanCamini/volleyball_game).
 
 ```bash
 npm install
@@ -16,9 +16,8 @@ npm run db:migrate # aplica migrations/ no D1 de produção (só para mudanças 
 ```
 
 Requer Node ≥ 20.9. O site é um **export estático** (`out/`): não há servidor Node em produção. A única parte
-dinâmica é um Worker pequeno em `worker/` (API do currículo, ranking dos mini-jogos e salas do vôlei online). Com
-`npm run dev` os jogos funcionam normalmente e o ranking e o online aparecem como indisponíveis (não há Worker); use
-`npm run preview` para testá-los.
+dinâmica é um Worker pequeno em `worker/` (API do currículo e ranking do Peek Trainer). Com `npm run dev` os jogos
+funcionam normalmente e o ranking aparece como indisponível (não há Worker); use `npm run preview` para testá-lo.
 
 ## Deploy na Cloudflare
 
@@ -27,12 +26,14 @@ O `wrangler.jsonc` publica `out/` como _static assets_ de um Worker:
 `public/_headers` define cache de 1 ano para `/_next/static/*` (arquivos com hash) e headers de segurança básicos.
 Só `/api/*` passa pelo código do Worker (`worker/index.ts`); todo o resto sai direto dos arquivos estáticos.
 
-### Ranking dos mini-jogos: banco D1, sem passo manual
+### Ranking: banco D1, sem passo manual
 
 O binding `DB` tem só `database_name` (`portfolio-ranking`): o primeiro `wrangler deploy` cria o banco na sua conta
 e os seguintes reaproveitam. O próprio Worker cria as tabelas que faltarem, a partir dos arquivos de `migrations/`
 (todos idempotentes), na primeira requisição que precisar delas — é assim que `0003_ranking.sql` (as tabelas do
-ranking compartilhado, já com o placar do endless copiado das tabelas antigas) entra num banco que já existia.
+ranking compartilhado) entra num banco que já existia. `0004` e `0005` eram do vôlei online e ficam só como
+histórico: as tabelas dele moraram aqui até a separação e são copiadas para o banco do jogo pelo script
+`scripts/import-from-portfolio.sh` de lá.
 `npm run db:migrate` aplica as migrations pela CLI, se preferir. Deploys de _preview_ (branches) não recebem banco:
 os jogos funcionam e o ranking aparece como indisponível, o que mantém testes fora do ranking real.
 
@@ -85,19 +86,22 @@ variável de build `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (`src/components/Cloudfl
 Não ative ao mesmo tempo a "instalação automática" do Web Analytics para o mesmo domínio, senão as visitas contam
 em dobro.
 
-### Vôlei online (1×1)
+### Vôlei: a campanha aqui, o jogo completo em outro site
 
-**Partida rápida** (uma fila que junta dois desconhecidos) ou salas por link: uma pessoa cria a sala, manda o link
-(`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
-Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
-navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 60 estados por segundo (e pelas teclas do adversário, repassadas na hora) que o
-servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 20 s), mesmo se fechou a aba: reabrir o site ou o link devolve a cadeira. A partida
-rápida vale **ranking online (Elo)**, gravado pelo servidor no D1, e a fila junta gente de nível parecido. Durante a
-partida há **reações** (teclas 1–6), um **indicador de conexão** dos dois jogadores, e quem abre o link de uma sala
-cheia **assiste** ao vivo; o botão **Ao vivo** lista as partidas rápidas em andamento para assistir. O deploy cria
-os Durable Objects (salas e fila) sozinho, pelas migrations do `wrangler.jsonc`; previews não têm salas e mostram o online como
-indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de latência), limites, custos e testes:
-**[docs/volei-online.md](docs/volei-online.md)**.
+O painel do vôlei roda só a **campanha** contra a CPU (praia, depois o chefe: um bug em produção). O jogo completo,
+com **online 1×1** (salas por link, partida rápida, ranking Elo, espectadores), **endless** e rankings, é um projeto
+separado, com Worker, D1 e Durable Objects próprios:
+[NathanCamini/volleyball_game](https://github.com/NathanCamini/volleyball_game).
+
+- **Links para lá:** o botão "Jogar online 1×1" da seção, o da barra do painel e um cartão depois da partida contra
+  o chefe. O endereço vem da variável de build **`NEXT_PUBLIC_GAME_URL`** (Worker → Settings → Build → Variables);
+  sem ela, os links levam ao repositório.
+- **Quem já jogava online aqui:** o id do navegador (do qual o rating Elo depende) e o apelido ficaram no
+  `localStorage` deste site. No clique, o link leva os dois no fragmento da URL (`#import=…`, que não vai a servidor
+  nenhum) e o jogo os guarda por lá (`src/lib/game-link.ts`).
+- **Links antigos de sala** (`/#volei-CÓDIGO`) redirecionam para a mesma sala no jogo.
+- **Durable Objects:** a migration `v3-volley-moved-out` do `wrangler.jsonc` apaga as classes `VolleyRoom` e
+  `VolleyQueue` deste Worker no próximo deploy (elas só guardavam salas em andamento; os ratings estão no D1).
 
 ### Idioma
 
@@ -119,7 +123,6 @@ indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de 
 | `canvas-confetti`                            | Confete nas comemorações (carregado só quando dispara)                       |
 | `jspdf`                                      | PDF do currículo, gerado no build (não vai para o navegador)                 |
 | Cloudflare Workers + D1                      | API do ranking global (SQLite gerenciado), rate limiting por IP              |
-| Cloudflare Durable Objects                   | Salas do vôlei online: WebSocket com hibernação, física autoritativa         |
 | `wrangler`                                   | Preview local (Worker + D1 simulados) e deploy no Cloudflare Workers         |
 | `vitest`, `eslint`, `prettier`, `typescript` | Qualidade                                                                    |
 
@@ -138,11 +141,10 @@ src/
 │  ├─ globals.css            # tokens Nocturne + classes .btn/.card/.tag/.seg
 │  ├─ fonts.ts, sitemap.ts, robots.ts
 ├─ config/site.ts            # nome, e-mail, redes, cor/acabamento do carro
-├─ config/game.ts            # pontos por fase e limite da CPU no endless (lido também pelo Worker)
+├─ config/game.ts            # pontos por fase da campanha do vôlei
 ├─ i18n/                     # config, detect (idioma do sistema), dicionários pt/en, I18nProvider
-├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts
-│  ├─ ranking/               # ranking compartilhado (navegador + Worker): jogos, regras por jogo, nomes, contrato
-│  └─ volley-online/         # vôlei online (navegador + Worker): protocolo, partida, sala, previsão — testado
+├─ lib/                      # palette.ts (tokens → canvas/WebGL), scroll.ts, game-link.ts (links para o vôlei completo)
+│  └─ ranking/               # ranking (navegador + Worker): jogos, regras por jogo, nomes, contrato
 ├─ hooks/                    # useTypewriter, useMediaQuery
 └─ components/
    ├─ motion/                # Reveal (whileInView), LocaleTransition, easing
@@ -161,15 +163,13 @@ src/
    └─ volleyball/
       ├─ engine/             # física, IA, render — TS puro, sem React (testado)
       ├─ useVolleyballGame.ts# loop de passo fixo, input, resize, apito inicial/final
-      ├─ online/             # aba online: conexão, reconexão, previsão, lobby e resultado
-      └─ VolleyballGame.tsx  # painel: toolbar com as abas, tela cheia, controles touch
+      ├─ PlayOnline.tsx      # link para o jogo completo (online, endless, rankings)
+      └─ VolleyballGame.tsx  # painel: campanha, tela cheia, controles touch
 worker/
-├─ index.ts                  # /api/ranking/:jogo (rotas, validação, rate limit), /api/volley → volley.ts; o resto → resume-api.ts
+├─ index.ts                  # /api/ranking/:jogo (rotas, validação, rate limit); o resto → resume-api.ts
 ├─ store.ts                  # SQL do D1 (ranking por jogador, ticket de uso único)
-├─ volley*.ts                # /api/volley: o Durable Object de cada sala e o da fila da partida rápida
-└─ test/                     # testes da API contra SQLite real (node:sqlite) + e2e do online contra wrangler dev
+└─ test/                     # testes da API contra SQLite real (node:sqlite)
 migrations/                  # schema do D1
-docs/volei-online.md         # o vôlei online em detalhe
 ```
 
 ## Decisões de engenharia
@@ -204,27 +204,24 @@ O **endless** é à parte: a CPU original, sem limite de pontos para o jogador, 
 
 **Dificuldade medida, não chutada.** `engine/bot.ts` tem um jogador simulado com limites humanos: relê a bola a cada
 250 ms (tempo de reação médio) e erra mais a previsão quanto mais longe a bola está. Ele enfrenta cada perfil em 500
-partidas com sementes fixas: vence **~98%** da fase 1, **~60%** contra o bug e **~50%** contra a CPU original do
-endless (que ficou idêntica: dá o mesmo resultado, ponto a ponto, que o motor antigo nas mesmas sementes). Os testes
-travam essas faixas (`engine/physics.test.ts`).
+partidas com sementes fixas: vence **~98%** da fase 1 e **~60%** contra o bug. Os testes travam essas faixas
+(`engine/physics.test.ts`).
 
-**Ranking global, compartilhado.** Um sistema só para todos os mini-jogos: mesma API, mesmo banco, mesmo filtro de
-nomes e o mesmo cartão de ranking — cada jogo entra com uma linha em `src/lib/ranking/contract.ts` e as suas regras em
-`rules.ts`. Cada jogo tem o seu top 10 (as pontuações não são comparáveis), mas o cartão tem **abas por jogo** e abre
-de qualquer um deles; o nome salvo vale para todos. Três endpoints por jogo: `GET /api/ranking/:jogo`,
+**Ranking global.** Um sistema feito para vários mini-jogos: mesma API, mesmo banco, mesmo filtro de nomes e o mesmo
+cartão de ranking — cada jogo entra com uma linha em `src/lib/ranking/contract.ts` e as suas regras em `rules.ts`.
+Hoje ele tem um jogo, o Peek Trainer (o endless do vôlei levou o seu placar para o site do jogo). Com mais de um jogo,
+o cartão mostra **abas por jogo**; o nome salvo vale para todos. Três endpoints por jogo: `GET /api/ranking/:jogo`,
 `POST /api/ranking/:jogo/matches` e `POST /api/ranking/:jogo/scores`. O top 10 mostra a **melhor marca de cada
 jogador** (nome sem diferenciar maiúsculas/acentos), com empate decidido por quem chegou primeiro — uma única query
 com `ROW_NUMBER()`.
 
-- **Vôlei (endless):** vale quantos pontos você faz antes de a CPU chegar a 7.
 - **Peek Trainer:** vale a pontuação da rodada de 30 s; o placar mostra o rank (Copper → Champion) e o % de
   headshots.
 
 Validação contra trapaça, em camadas:
 
 - **Regras de cada jogo, derivadas do próprio motor** (`src/lib/ranking/rules.ts`, as mesmas constantes que o jogo
-  usa). Vôlei: tempo mínimo por ponto (a bola paira 900 ms no saque e há 1,2 s de pausa após cada ponto), contando os
-  seus pontos e os 7 da CPU — 100 pontos em 1 minuto é recusado. Peek Trainer: acertos ≤ tiros, headshots ≤ acertos,
+  usa). Peek Trainer: acertos ≤ tiros, headshots ≤ acertos,
   no máximo 74 alvos por rodada (o ritmo de aparição do motor) e uma pontuação que esses acertos consigam fazer
   (sequência perfeita com os headshots no multiplicador mais alto) — os testes simulam uma rodada perfeita e garantem
   que ela nunca é recusada.
@@ -261,9 +258,9 @@ teclado (setas / Home), texto do terminal de IA exposto por inteiro a leitores d
 ## Personalização
 
 - Textos: `src/i18n/dictionaries/pt.ts` e `en.ts` (os `[colchetes]` são placeholders do design).
-- Contato, cor/acabamento do carro: `src/config/site.ts`. Pontos por fase e limite da CPU no endless:
-  `src/config/game.ts` (mudar o limite muda o significado do ranking: comece um novo). Perfis de dificuldade da
-  CPU (fase 1, endless, chefe): `CPU` em `src/components/volleyball/engine/constants.ts`.
+- Contato, cor/acabamento do carro, endereço do vôlei completo: `src/config/site.ts`. Pontos por fase:
+  `src/config/game.ts`. Perfis de dificuldade da CPU (fase 1, chefe): `CPU` em
+  `src/components/volleyball/engine/constants.ts`.
 - Lista de palavras bloqueadas nos nomes: `src/lib/ranking/nickname.ts`. Novo jogo no ranking: uma entrada em
   `GAMES` (`src/lib/ranking/contract.ts`), as regras em `rules.ts` e a apresentação em `src/components/ranking/games.ts`.
 - Cores: tokens em `src/app/globals.css` — o canvas do jogo e a cena 3D leem os mesmos tokens.

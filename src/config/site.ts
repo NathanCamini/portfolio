@@ -6,6 +6,13 @@ export const site = {
   /** Public URL, used for canonical/OG tags. Set NEXT_PUBLIC_SITE_URL in production. */
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
   email: 'camininathan@gmail.com',
+  /**
+   * The full volleyball game (online 1×1, Endless, rankings), a separate site
+   * since the split (NathanCamini/volleyball_game). Set NEXT_PUBLIC_GAME_URL in
+   * production; without it the "play online" links point at the repository.
+   */
+  gameUrl: process.env.NEXT_PUBLIC_GAME_URL ?? null,
+  gameRepo: 'https://github.com/NathanCamini/volleyball_game',
   links: {
     github: 'https://github.com/NathanCamini',
     linkedin: 'https://www.linkedin.com/in/nathancamini/',
@@ -26,4 +33,4 @@ export const carConfig: { color: string; finish: 'metallic' | 'solid' } = {
   finish: 'solid',
 };
 
-// Volleyball difficulty and win score live in ./game.ts (shared with the ranking Worker).
+// The campaign's win score lives in ./game.ts.

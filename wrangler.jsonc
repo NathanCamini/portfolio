@@ -1,5 +1,5 @@
 // Cloudflare Workers: the static export in ./out plus a small Worker for /api/*
-// (résumé API and the mini-games' global ranking). `npm run deploy` builds the
+// (résumé API and the Peek Trainer's ranking). `npm run deploy` builds the
 // static export into ./out and uploads both.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -8,8 +8,8 @@
   "name": "portfolio",
   "compatibility_date": "2026-09-01",
   // GET /api/nathan — the résumé as JSON (src/lib/resume-api.ts);
-  // /api/ranking/:game — the mini-games' global ranking (worker/store.ts, D1);
-  // /api/volley/rooms — online 1v1 volleyball (worker/volley.ts, Durable Objects).
+  // /api/ranking/:game — the Peek Trainer's ranking (worker/store.ts, D1).
+  // The online volleyball (rooms, Elo, Endless) moved to its own Worker: NathanCamini/volleyball_game.
   "main": "worker/index.ts",
   "assets": {
     "directory": "./out",
@@ -23,6 +23,7 @@
   // src/config/site.ts reads this Next.js build-time variable; the Worker has no `process`.
   "define": {
     "process.env.NEXT_PUBLIC_SITE_URL": "undefined",
+    "process.env.NEXT_PUBLIC_GAME_URL": "undefined",
   },
   // Global ranking. No database_id: the first `wrangler deploy` creates the
   // database by name (and reuses it afterwards); the Worker creates the tables
@@ -34,32 +35,23 @@
       "migrations_dir": "migrations",
     },
   ],
-  // Per-IP limits, shared by every game (a volley run lasts 15 s+, a trainer round 30 s: 6 kickoffs a minute is plenty).
-  // ROOM_LIMIT: online rooms created per IP (docs/volei-online.md).
+  // Per-IP limits (a trainer round lasts 30 s: 6 kickoffs a minute is plenty). The game's Worker uses 2001+.
   "ratelimits": [
     { "name": "KICKOFF_LIMIT", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
     { "name": "SUBMIT_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
-    { "name": "ROOM_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
-    // QUEUE_LIMIT: quick-match searches per IP (the pre-check and the socket both count).
-    { "name": "QUEUE_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } },
   ],
-  // Online 1v1 volleyball: one Durable Object per room runs the match (worker/volley-room.ts).
-  "durable_objects": {
-    "bindings": [
-      { "name": "VOLLEY_ROOMS", "class_name": "VolleyRoom" },
-      // The quick-match queue (worker/volley-queue.ts): one instance for everyone.
-      { "name": "VOLLEY_QUEUE", "class_name": "VolleyQueue" },
-    ],
-  },
-  // SQLite-backed Durable Objects are the kind available on the Workers Free plan.
-  // Published migrations are never edited: each new class gets its own tag.
+  // Durable Object history. The online volleyball's rooms and queue lived here until
+  // the game got its own Worker (NathanCamini/volleyball_game); v3 deletes both classes
+  // and whatever they stored (only live rooms: ratings are in D1). Published migrations
+  // are never edited, and the tags stay in order, so the list keeps all three.
   "migrations": [
     { "tag": "v1-volley-rooms", "new_sqlite_classes": ["VolleyRoom"] },
     { "tag": "v2-volley-queue", "new_sqlite_classes": ["VolleyQueue"] },
+    { "tag": "v3-volley-moved-out", "deleted_classes": ["VolleyRoom", "VolleyQueue"] },
   ],
   // Required by `wrangler preview`, which Cloudflare's Git integration runs for
   // non-production branches. Bindings aren't inherited here, so previews have no
-  // database and no online rooms: the games work, the ranking and online mode
-  // show as unavailable, which keeps test runs out of the real leaderboard.
+  // database: the games work, the ranking shows as unavailable, which keeps test
+  // runs out of the real leaderboard.
   "previews": {},
 }
