@@ -37,6 +37,9 @@ export const NET = {
   EMOTE_COOLDOWN_MS: 1_500,
   /** Spectators per room. */
   MAX_SPECTATORS: 20,
+  /** A live room re-publishes itself at least this often; the showcase drops rooms silent for LIVE_STALE_MS. */
+  LIVE_HEARTBEAT_MS: 30_000,
+  LIVE_STALE_MS: 75_000,
 } as const;
 
 // ---------------------------------------------------------------- reactions
@@ -370,4 +373,28 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
     lastScorer: scorer === 255 ? null : (scorer as Side),
     inputs: [v.getUint8(o + 2), v.getUint8(o + 3)],
   };
+}
+
+// ---------------------------------------------------------------- live matches (HTTP)
+
+/**
+ * What a quick-match room publishes while a match is on (docs/volei-online.md,
+ * "Ao vivo"): enough for the showcase to list it. Friendly rooms never publish.
+ */
+export interface LiveSummary {
+  names: [string, string];
+  score: [number, number];
+  phase: 'countdown' | 'playing' | 'paused';
+  spectators: number;
+}
+
+/** A row of GET /api/volley/live. */
+export interface LiveMatch extends LiveSummary {
+  code: string;
+  /** When the room last said it was alive (epoch ms). */
+  updatedAt: number;
+}
+
+export interface LiveResponse {
+  matches: LiveMatch[];
 }

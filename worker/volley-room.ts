@@ -8,6 +8,7 @@ import {
   type RoomHost,
   type TimerName,
 } from '../src/lib/volley-online/room';
+import { publishLive } from './live';
 import { ratingOf, recordResult } from './ratings';
 import type { VolleyEnv } from './volley';
 
@@ -46,6 +47,8 @@ export class VolleyRoom implements DurableObject {
   private readonly conns = new Map<WebSocket, Conn>();
   private readonly timers = new Map<TimerName, ReturnType<typeof setTimeout>>();
   private loop: ReturnType<typeof setTimeout> | null = null;
+  /** Showcase writes, one after the other. */
+  private liveWrites: Promise<void> = Promise.resolve();
   /** The match loop is wanted (setLoop(true)); the timer re-arms itself while it is. */
   private looping = false;
 
@@ -81,6 +84,15 @@ export class VolleyRoom implements DurableObject {
     // Without the database (previews) nothing is rated: lookups say "new player", results aren't saved.
     rating: (pid) => (this.env.DB ? ratingOf(this.env.DB, pid) : Promise.resolve(null)),
     record: (result) => (this.env.DB ? recordResult(this.env.DB, result, Date.now()) : Promise.resolve(null)),
+    // Best effort, but in order: a point and the final whistle must not land the other way round
+    // (a stale row would linger in the showcase). A failed write is redone by the next point or heartbeat.
+    live: (summary) => {
+      const db = this.env.DB;
+      const code = this.core?.code;
+      if (!db || !code) return;
+      const at = Date.now();
+      this.liveWrites = this.liveWrites.then(() => publishLive(db, code, summary, at)).catch(() => {});
+    },
   };
 
   constructor(

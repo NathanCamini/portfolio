@@ -3,9 +3,10 @@ import volleyRanking from '../migrations/0001_volley_ranking.sql';
 import volleyEndless from '../migrations/0002_volley_endless.sql';
 import ranking from '../migrations/0003_ranking.sql';
 import onlineRatings from '../migrations/0004_online_ratings.sql';
+import onlineLive from '../migrations/0005_online_live.sql';
 
 /** Every migration's statements, in order (none has `;` or `--` inside string literals). */
-const SCHEMA = [volleyRanking, volleyEndless, ranking, onlineRatings]
+const SCHEMA = [volleyRanking, volleyEndless, ranking, onlineRatings, onlineLive]
   .join(';')
   .replace(/--[^\n]*/g, '')
   .split(';')

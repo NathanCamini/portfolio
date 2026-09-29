@@ -12,6 +12,8 @@ import {
   isRoomCode,
   normalizeRoomCode,
   ROOM_CODE_LENGTH,
+  type LiveMatch,
+  type LiveResponse,
   type OnlineRankingEntry,
   type OnlineRankingResponse,
   type RoomView,
@@ -37,6 +39,9 @@ interface Props {
   joinCode: string | null;
   onChrome: (chrome: OnlineChrome) => void;
 }
+
+/** The showcase refreshes this often while open (the start card's count, 3× slower). */
+const LIVE_POLL_MS = 5_000;
 
 const secondsIn = (ms: number) => Math.max(0, Math.ceil(ms / 1000));
 
@@ -71,7 +76,7 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isTouch = useMediaQuery('(pointer: coarse)');
   /** The start card's "Online ranking" view. */
-  const [board, setBoard] = useState(false);
+  const [board, setBoard] = useState<'ranking' | 'live' | null>(null);
   /** The nickname being typed: kept here, so it survives a look at the ranking (the start card unmounts). */
   const [draftName, setDraftName] = useState(rememberedName);
   const {
@@ -88,6 +93,7 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
     create,
     enter,
     quick,
+    watch,
     cancel,
     setReady,
     leave,
@@ -100,6 +106,9 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
     strings: vb.game,
     youLabel: vb.game.you,
   });
+
+  /** How many matches are on now, for the start card's "Live" button (polled while it shows). */
+  const liveCount = useLiveCount(status === 'idle' && board === null);
 
   const phase = status === 'online' ? (room?.phase ?? null) : null;
   const card = status !== 'online' || phase === 'waiting' || phase === 'paused' || phase === 'over';
@@ -136,17 +145,32 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
         <Searching since={searchingSince} on={on} onCancel={cancel} />
       </Card>
     );
-  } else if (status === 'idle' && board) {
+  } else if (status === 'idle' && board === 'ranking') {
     overlay = (
       <Card>
-        <Board on={on} onBack={() => setBoard(false)} />
+        <Board on={on} onBack={() => setBoard(null)} />
+      </Card>
+    );
+  } else if (status === 'idle' && board === 'live') {
+    overlay = (
+      <Card>
+        <LiveBoard
+          on={on}
+          onBack={() => setBoard(null)}
+          onWatch={(code) => {
+            setBoard(null);
+            void watch(code);
+          }}
+        />
       </Card>
     );
   } else if (status === 'idle' || status === 'working') {
     overlay = (
       <Card>
         <StartCard
-          onRanking={() => setBoard(true)}
+          onRanking={() => setBoard('ranking')}
+          onLive={() => setBoard('live')}
+          liveCount={liveCount}
           name={draftName}
           setName={setDraftName}
           on={on}
@@ -557,6 +581,115 @@ function RatingLine({ change, on }: { change: RatingChange; on: OnlineStrings })
 type BoardState =
   { kind: 'loading' } | { kind: 'error'; error: OnlineErrorKey } | { kind: 'ready'; data: OnlineRankingResponse };
 
+/** Polls GET /api/volley/live while `active`; null until the first answer (or if online is unavailable). */
+function useLiveCount(active: boolean) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/volley/live', { cache: 'no-store' });
+        if (!res.ok) return;
+        const { matches } = (await res.json()) as LiveResponse;
+        if (live) setCount(matches.length);
+      } catch {
+        /* offline: the button simply shows no count */
+      }
+    };
+    void load();
+    const id = setInterval(load, LIVE_POLL_MS * 3);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, [active]);
+  return count;
+}
+
+/** The live showcase: the quick matches on now, refreshed every few seconds, one click to watch. */
+function LiveBoard({
+  on,
+  onBack,
+  onWatch,
+}: {
+  on: OnlineStrings;
+  onBack: () => void;
+  onWatch: (code: string) => void;
+}) {
+  const [matches, setMatches] = useState<LiveMatch[] | null>(null);
+  const [failed, setFailed] = useState<OnlineErrorKey | null>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true });
+    let live = true;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/volley/live', { cache: 'no-store' });
+        if (!live) return;
+        if (!res.ok) return setFailed(res.status === 503 ? 'unavailable' : 'network');
+        const data = (await res.json()) as LiveResponse;
+        if (live) {
+          setMatches(data.matches);
+          setFailed(null);
+        }
+      } catch {
+        if (live) setFailed('network');
+      }
+    };
+    void load();
+    const id = setInterval(load, LIVE_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  return (
+    <div className={styles.boardCard}>
+      <header>
+        <h3 className={styles.title}>{on.liveTitle}</h3>
+        <p className={styles.sub}>{on.liveHelp}</p>
+      </header>
+      {failed && <p className={styles.error}>{on.errors[failed]}</p>}
+      {!failed && matches === null && (
+        <p className={styles.status} role="status">
+          <span className={styles.spinner} aria-hidden="true" />
+        </p>
+      )}
+      {matches?.length === 0 && <p className={styles.note}>{on.liveEmpty}</p>}
+      {matches && matches.length > 0 && (
+        <ul className={styles.liveList}>
+          {matches.map((m) => (
+            <li key={m.code}>
+              <span className={styles.liveNames}>
+                <span className={styles.name}>{m.names[0]}</span>
+                <span className={styles.liveScore}>
+                  {m.score[0]} <span className={styles.times}>×</span> {m.score[1]}
+                </span>
+                <span className={styles.name}>{m.names[1]}</span>
+              </span>
+              <span className={styles.tags}>
+                {m.phase === 'paused' && <span className={styles.off}>{on.livePaused}</span>}
+                {m.spectators > 0 && <span className={styles.ping}>👁 {m.spectators}</span>}
+              </span>
+              <button type="button" className={`btn btn-primary ${styles.small}`} onClick={() => onWatch(m.code)}>
+                {on.watch}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className={styles.actions}>
+        <button ref={backRef} type="button" className="btn btn-secondary" onClick={onBack}>
+          {on.back}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The online ranking: top 10 by rating, and where this browser's player stands. */
 function Board({ on, onBack }: { on: OnlineStrings; onBack: () => void }) {
   const [state, setState] = useState<BoardState>({ kind: 'loading' });
@@ -628,6 +761,8 @@ function Board({ on, onBack }: { on: OnlineStrings; onBack: () => void }) {
 
 function StartCard({
   onRanking,
+  onLive,
+  liveCount,
   name,
   setName,
   on,
@@ -648,6 +783,8 @@ function StartCard({
   onQuick: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onRanking: () => void;
+  onLive: () => void;
+  liveCount: number | null;
   name: string;
   setName: (name: string) => void;
 }) {
@@ -710,10 +847,17 @@ function StartCard({
           <h3 id={titleId} className={styles.title}>
             {on.title}
           </h3>
-          <button type="button" className={`btn btn-secondary ${styles.small}`} onClick={onRanking} disabled={busy}>
-            <Trophy size={13} />
-            {on.ranking}
-          </button>
+          <div className={styles.titleActions}>
+            <button type="button" className={`btn btn-secondary ${styles.small}`} onClick={onLive} disabled={busy}>
+              <span className={`${styles.liveDot} ${liveCount ? styles.liveOn : ''}`} aria-hidden="true" />
+              {on.live}
+              {liveCount ? <span className={styles.liveCount}>{liveCount}</span> : null}
+            </button>
+            <button type="button" className={`btn btn-secondary ${styles.small}`} onClick={onRanking} disabled={busy}>
+              <Trophy size={13} />
+              {on.ranking}
+            </button>
+          </div>
         </div>
         <p className={styles.sub}>{on.intro}</p>
       </header>

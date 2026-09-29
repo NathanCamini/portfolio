@@ -88,7 +88,8 @@ src/lib/volley-online/            # compartilhado: roda no Worker e no navegador
 ├─ predictor.ts                   # Predictor (previsão + reconciliação + suavização), TickClock, mirrorState
 └─ testing.ts                     # bots e gerador pseudoaleatório para os testes
 worker/
-├─ volley.ts                      # rotas HTTP /api/volley/rooms e /api/volley/queue
+├─ volley.ts                      # rotas HTTP /api/volley/rooms, /queue, /ratings e /live
+├─ live.ts                        # a vitrine: grava e lista as partidas ao vivo (D1)
 ├─ volley-room.ts                 # o Durable Object VolleyRoom (adaptador de RoomCore)
 ├─ volley-queue.ts                # o Durable Object VolleyQueue (adaptador de MatchQueue)
 └─ test/volley.test.ts            # rotas; test/online.e2e.test.ts: partida real contra `wrangler dev`
@@ -119,6 +120,7 @@ O modo contra a CPU continua idêntico, e os testes de dificuldade do motor segu
 | `GET /api/volley/queue`       | Com `Upgrade: websocket`: `101`, o WebSocket da fila. `Origin` obrigatório (`403`).                      |
 | `GET /api/volley/queue`       | Sem upgrade: `204`, ou `429` / `503`. O pré-teste da partida rápida.                                     |
 | `GET /api/volley/ratings`     | `200 { top, me? }`: o ranking online (top 10); `?me=<sha-256 do id>` inclui a sua posição. `503` sem D1. |
+| `GET /api/volley/live`        | `200 { matches }`: até 10 partidas rápidas em andamento, as mais assistidas primeiro. `503` sem D1.      |
 
 O pré-teste por HTTP existe porque um WebSocket recusado não diz o motivo ao navegador. Com ele, a página mostra
 "sala não encontrada", "sala cheia" ou "online indisponível".
@@ -270,6 +272,28 @@ esquerda); o espectador vê cada um sobre o seu lado da quadra. Só jogadores re
 **Conexão.** Durante a partida, o canto da quadra mostra três barrinhas para cada jogador, calculadas a partir da ida
 e volta que cada um mede: verde abaixo de 80 ms, amarelo até 160 ms, vermelho acima. Você vê a sua e a do
 adversário, então dá para saber de quem é o lag.
+
+## Ao vivo
+
+O botão **Ao vivo** (com um ponto vermelho pulsando e quantas partidas há agora) abre a lista das partidas rápidas
+em andamento: "Nathan 3 × 2 Maria · 👁 1 · Assistir". Assistir entra na sala como espectador, igual a abrir o link de
+uma sala cheia.
+
+- **Só partidas rápidas.** Salas criadas por link são amistosas e privadas: nunca aparecem. Uma sala da fila já é
+  pública por natureza (qualquer um cai nela).
+- **Quem publica é a sala.** `RoomCore` monta um `LiveSummary` (apelidos, placar, fase, espectadores) e chama
+  `host.live(resumo)` quando ele muda: início da contagem, cada ponto, pausa e volta, espectador entrando ou saindo.
+  No fim (resultado, W.O., sala vazia) manda `null`, e a linha some.
+- **Batimento.** Mesmo sem mudança, a sala republica a cada 30 s (`NET.LIVE_HEARTBEAT_MS`). Uma linha sem notícia
+  há mais de 75 s (`NET.LIVE_STALE_MS`) não aparece mais e é apagada na próxima escrita: se o objeto sumir sem
+  avisar (deploy, despejo), a vitrine se limpa sozinha.
+- **Onde fica.** Na tabela `online_live` do D1 (`migrations/0005_online_live.sql`, criada pelo Worker na primeira
+  vez, como as outras). Cada escrita é um lote: grava ou apaga a linha da sala e varre as velhas. O Durable Object
+  encadeia as escritas numa fila de promessas, para um ponto e o apito final não chegarem invertidos; uma escrita
+  que falha é refeita pelo próximo ponto ou batimento. Nada disso atrasa a partida: não se espera o banco.
+- **Custo.** Algumas dezenas de escritas por partida (pontos, espectadores e batimentos), bem dentro do plano gratuito do D1.
+- **Na página.** A lista pede `GET /api/volley/live` a cada 5 s enquanto está aberta; o contador do botão, a cada
+  15 s, só na tela inicial da aba online. Sem D1 (previews), a lista diz que não há partidas.
 
 ## Servidor autoritativo
 
@@ -477,13 +501,17 @@ npx vitest run src/lib/volley-online worker    # só o online
   (sala amistosa, mesmo navegador, mesmo IP, sem id); sala continua ranqueada depois de hibernar.
 - `worker/test/ratings.test.ts`: o SQL de verdade (SQLite do Node): começa sem rating, grava os dois lados,
   acumula, guarda só o hash, `GET /api/volley/ratings` com e sem `?me`.
+- `room.test.ts` (vitrine): uma sala ranqueada publica na contagem, nos pontos e com espectadores, e manda `null`
+  quando alguém sai; o batimento nunca passa de 30 s; uma sala amistosa nunca publica.
+- `worker/test/live.test.ts`: o SQL da vitrine (ordem por espectadores, remoção, linhas velhas escondidas e
+  varridas) e a rota `GET /api/volley/live` (`200`, e `503` sem D1).
 - `worker/test/volley.test.ts`: as rotas (criação, colisão de código, `403`/`429`/`503`, encaminhamento do upgrade,
   pré-teste), da sala e da fila.
 - `link.test.ts`: o link da sala e a leitura do `#volei-CÓDIGO`.
 - `worker/test/online.e2e.test.ts`: **partida real** contra o `wrangler dev`, com o Durable Object de verdade e
   WebSockets de verdade. Dois bots usam o mesmo `Predictor` e o mesmo `TickClock` do navegador, jogam até 7, um
   deles cai e volta no meio; outros dois se encontram pela partida rápida, jogam, um desiste e o ranking do D1
-  registra a vitória e a derrota; um terceiro jogador é recusado e
+  registra a vitória e a derrota (e a sala aparece em `/api/volley/live` durante a partida e some depois); um terceiro jogador é recusado e
   uma sala inexistente não abre; um espectador assiste uma partida real (~60 snapshots/s) e vê a reação de um
   jogador. Leva ~2 minutos
   e só roda quando pedido:
@@ -516,6 +544,13 @@ E a fase 4, com três pessoas (duas jogando, uma assistindo pelo link da sala ch
 - o espectador vê "Assistindo · Nathan × Maria", depois a partida, e sai trocando de aba;
 - tecla 5 (🔥) de um jogador e o botão 😂 do outro no celular: cada balão aparece do lado certo para os três;
 - barrinhas de conexão dos dois jogadores e o 👁 com o número de espectadores, que some quando ele sai.
+
+E a vitrine, com três pessoas (desktop jogando uma partida rápida contra um bot de outro IP, celular assistindo):
+
+- sem partidas, a lista mostra o aviso de vazio;
+- com a partida em andamento, o botão mostra "Live 1" e a lista "Robo Rival 0 × 0 Nathan · Watch";
+- Watch leva direto à tela de espectador (👁 1 para os jogadores);
+- quando o bot sai, o espectador vê "Nathan wins".
 
 Nenhum erro no console.
 
@@ -563,14 +598,15 @@ migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo i
   quem estiver lá, perto ou longe.
 - **Corrida rara no rating:** ler e gravar o rating são duas idas ao D1. Se o mesmo jogador terminar duas partidas
   rápidas no mesmo instante (duas abas, duas salas), uma atualização pode se perder.
-- **Espectador só pelo link.** Não há uma lista de partidas em andamento para escolher; para assistir, é preciso o link
-  (ou o código) de uma sala cheia.
+- **Vitrine só com partidas rápidas.** Uma partida amistosa (sala por link) só é assistida por quem tem o link. A
+  lista também atrasa até 5 s (a busca periódica) e mostra no máximo 10 partidas.
 
 ## Próximas fases
 
 2. ~~**Partida rápida**~~: feita (ver [Partida rápida](#partida-rápida)).
 3. ~~**Ranking online (Elo)**~~: feito (ver [Ranking online](#ranking-online)).
 4. ~~**Acabamento**~~: feito (ver [Reações, espectadores e conexão](#reações-espectadores-e-conexão)).
+5. ~~**Vitrine ao vivo**~~: feita (ver [Ao vivo](#ao-vivo)).
 
-Ideias para depois: uma vitrine de partidas ao vivo para assistir, replays (a partida é determinística: guardar as
+Ideias para depois: replays (a partida é determinística: guardar as
 teclas basta para reproduzi-la inteira) e salas com melhor de 3.

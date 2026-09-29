@@ -6,6 +6,7 @@ import {
   parseServerMessage,
   PROTOCOL_VERSION,
   type ErrorCode,
+  type LiveSummary,
   type RoomView,
   type ServerMessage,
   type Snapshot,
@@ -42,6 +43,9 @@ class FakeHost implements RoomHost {
   /** A fake ratings table: pid → { rating, games }. */
   ratings = new Map<string, { rating: number; games: number }>();
   recorded: RatedResult[] = [];
+  /** What the room told the live showcase, in order. */
+  published: (LiveSummary | null)[] = [];
+  live = (summary: LiveSummary | null) => void this.published.push(summary);
   rating = async (pid: string) => this.ratings.get(pid)?.rating ?? null;
   record = async (r: RatedResult) => {
     this.recorded.push(r);
@@ -500,5 +504,62 @@ describe('spectators and reactions (phase 4)', () => {
     again.restoreWatcher(w);
     expect(again.empty).toBe(false);
     expect(again.view().spectators).toBe(1);
+  });
+});
+
+describe('live showcase (rated rooms)', () => {
+  const PA = 'a'.repeat(32);
+  const PB = 'b'.repeat(32);
+
+  it('publishes a quick-match room from kickoff, on every point and on spectators, and withdraws it at the end', () => {
+    const { join, start, say, host, room } = setup(newRoom('ABC23', 1_000_000, true));
+    const a = join('Nathan', undefined, { pid: PA });
+    const b = join('Maria', undefined, { pid: PB });
+    expect(host.published).toEqual([]); // nothing to watch in the lobby
+    start(a, b);
+    expect(host.published.at(-1)).toEqual({
+      names: ['Nathan', 'Maria'],
+      score: [0, 0],
+      phase: 'playing',
+      spectators: 0,
+    });
+
+    const w = new FakeConn();
+    room.connect(w);
+    room.message(w, JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: '', watch: true }));
+    expect(host.published.at(-1)).toMatchObject({ spectators: 1 });
+
+    // The server walks away from its serve: a point, and the showcase's score moves.
+    host.advance(100);
+    say(a, { t: 'input', tick: a.last('state')!.s.tick + 5, bits: KEY.LEFT });
+    for (let i = 0; i < 600 && !host.published.some((p) => p && p.score[0] + p.score[1] > 0); i++) host.advance(16);
+    expect(host.published.some((p) => p && p.score[1] === 1)).toBe(true);
+
+    say(b, { t: 'leave' });
+    expect(host.published.at(-1)).toBeNull();
+  });
+
+  it('says it is still there at least every LIVE_HEARTBEAT_MS while the match is on', () => {
+    const { join, start, host } = setup(newRoom('ABC23', 1_000_000, true));
+    start(join('Nathan', undefined, { pid: PA }), join('Maria', undefined, { pid: PB }));
+    const times: number[] = [];
+    const live = host.live;
+    host.live = (summary) => {
+      times.push(host.time);
+      live(summary);
+    };
+    const from = host.time;
+    host.advance(3 * NET.LIVE_HEARTBEAT_MS);
+    const marks = [from, ...times];
+    for (let i = 1; i < marks.length; i++)
+      expect(marks[i] - marks[i - 1]).toBeLessThanOrEqual(NET.LIVE_HEARTBEAT_MS + 16);
+    expect(times.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('never lists a friendly room', () => {
+    const { join, start, host } = setup(newRoom('ABC23', 1_000_000, false));
+    start(join('Nathan'), join('Maria'));
+    host.advance(2000);
+    expect(host.published.every((p) => p === null)).toBe(true);
   });
 });

@@ -10,6 +10,7 @@ import {
   PROTOCOL_VERSION,
   type ClientMessage,
   type ErrorCode,
+  type LiveSummary,
   type RoomPhase,
   type RoomView,
   type ServerMessage,
@@ -75,6 +76,8 @@ export interface RoomHost {
   rating(pid: string): Promise<number | null>;
   /** Rated rooms: saves the result and returns both players' change (null if it couldn't be saved). */
   record(result: RatedResult): Promise<[RatingChange, RatingChange] | null>;
+  /** Rated rooms: the match as the live showcase lists it, or null when there's nothing to watch. */
+  live(summary: LiveSummary | null): void;
 }
 
 export interface PersistedSeat {
@@ -123,6 +126,9 @@ export class RoomCore {
   private readonly pending = new Map<string, Conn>();
   /** Spectators: read-only sockets that get everything the players get. */
   private readonly watchers = new Map<string, Conn>();
+  /** The last thing told to the showcase (JSON), and when. */
+  private lastLive: string | null = null;
+  private lastLiveAt = 0;
   /** When each side last reacted (EMOTE_COOLDOWN_MS). */
   private readonly lastEmote: [number, number] = [-Infinity, -Infinity];
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
@@ -184,7 +190,10 @@ export class RoomCore {
   closed(conn: Conn) {
     this.buckets.delete(conn.id);
     if (this.pending.delete(conn.id)) this.host.setTimer(`hello:${conn.id}`, null);
-    if (this.watchers.delete(conn.id)) return this.broadcastRoom();
+    if (this.watchers.delete(conn.id)) {
+      this.broadcastRoom();
+      return this.publish();
+    }
     const side = this.sideOf(conn);
     if (side === null) return;
     this.seats[side]!.conn = null;
@@ -221,7 +230,9 @@ export class RoomCore {
       if (match.tick % NET.SNAPSHOT_EVERY === 0) this.broadcast({ t: 'state', s: match.snapshot() });
       // Off the rhythm: sync() so the server keeps the same rounded state it sends (quantization).
       else if (match.g.phase !== phase) this.broadcast({ t: 'state', s: match.sync() });
+      if (match.g.phase !== phase) this.publish(); // a point: the showcase's score moves
     }
+    if (now - this.lastLiveAt >= NET.LIVE_HEARTBEAT_MS) this.publish(true);
     if (match.over) {
       this.finish(match.winner, false);
       return STEP_MS * NET.SNAPSHOT_EVERY;
@@ -287,6 +298,7 @@ export class RoomCore {
     this.to(conn, { t: 'watching', room: this.view() });
     if (this.match) this.to(conn, { t: 'state', s: this.match.snapshot() });
     this.broadcastRoom(); // the players see one more watching
+    this.publish();
   }
 
   /** After hibernation: a spectator's socket. */
@@ -549,6 +561,30 @@ export class RoomCore {
       result: this.result,
     });
     this.broadcastRoom();
+    this.publish();
+  }
+
+  /** The match for the live showcase: only rated (quick-match) rooms, only while a match is on. */
+  private liveSummary(): LiveSummary | null {
+    const match = this.match;
+    if (!this.rated || !match) return null;
+    if (this.phase !== 'playing' && this.phase !== 'paused' && this.phase !== 'countdown') return null;
+    return {
+      names: this.seats.map((s) => s?.name ?? '') as [string, string],
+      score: [match.g.score[0], match.g.score[1]],
+      phase: this.phase,
+      spectators: this.watchers.size,
+    };
+  }
+
+  /** Tells the showcase when something it shows changed (or, with `heartbeat`, that the room is still there). */
+  private publish(heartbeat = false) {
+    const summary = this.liveSummary();
+    const key = summary && JSON.stringify(summary);
+    if (key === this.lastLive && !(summary && heartbeat)) return;
+    this.lastLive = key;
+    this.lastLiveAt = this.host.now();
+    this.host.live(summary);
   }
 
   private broadcastRoom() {
