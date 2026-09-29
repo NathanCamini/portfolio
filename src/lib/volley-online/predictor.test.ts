@@ -4,7 +4,7 @@ import { createGame, kickoff } from '../../components/volleyball/engine/physics'
 import type { Side } from '../../components/volleyball/engine/types';
 import { OnlineMatch } from './match';
 import { mirrorState, Predictor, TickClock } from './predictor';
-import { takeSnapshot, type Snapshot } from './protocol';
+import { KEY, NET, takeSnapshot, type Snapshot } from './protocol';
 import { seeded, sideBot } from './testing';
 
 const STEP_MS = TIMING.STEP * 1000;
@@ -73,6 +73,12 @@ interface NetOptions {
   /** Extra random delay per message, 0..jitter ms. */
   jitter: number;
   seed: number;
+  /** The opponent's key changes are relayed as they happen (default), or only learnt from snapshots (before). */
+  relay?: boolean;
+  /** Ticks between snapshots (default NET.SNAPSHOT_EVERY; 4 was the old 30/s). */
+  every?: number;
+  /** A point is sent the moment it happens (default), or waits for the next snapshot tick. */
+  events?: boolean;
 }
 
 /**
@@ -82,7 +88,7 @@ interface NetOptions {
  * keys from what each browser *predicts*, and every message delayed by the
  * network. Returns how far predictions strayed from the truth.
  */
-function simulate({ latency, jitter, seed }: NetOptions) {
+function simulate({ latency, jitter, seed, relay = true, every = NET.SNAPSHOT_EVERY, events = true }: NetOptions) {
   const rng = seeded(seed);
   const delay = () => latency + rng() * jitter;
   const server = new OnlineMatch(0);
@@ -93,13 +99,22 @@ function simulate({ latency, jitter, seed }: NetOptions) {
   });
   type Msg = { at: number; deliver: (now: number) => void };
   let inbox: Msg[] = [];
-  const send = (deliver: (now: number) => void, now: number) => inbox.push({ at: now + delay(), deliver });
+  // A WebSocket runs over TCP: each direction of each connection delivers in order (a late
+  // message holds up the ones behind it), it never reorders.
+  const lastAt = new Map<string, number>();
+  const send = (deliver: (now: number) => void, now: number, channel: string) => {
+    const at = Math.max(now + delay(), lastAt.get(channel) ?? 0);
+    lastAt.set(channel, at);
+    inbox.push({ at, deliver });
+  };
 
   let nextPing = 0;
   let ownError = 0; // largest own-body correction during a rally
   let ballError = 0;
-  let ballSamples = 0;
-  const predicted = new Map<string, number>(); // `${side}:${tick}` → predicted ball x
+  let opponentError = 0;
+  let samples = 0;
+  /** `${side}:${tick}` → what that browser showed for the tick (ball x, opponent x), after the corrections it had by then. */
+  const shown = new Map<string, [number, number]>();
 
   for (let now = 0; !server.over && now < 20 * 60_000; now++) {
     // 1) the network delivers what's due
@@ -107,22 +122,29 @@ function simulate({ latency, jitter, seed }: NetOptions) {
     inbox = inbox.filter((m) => m.at > now);
     due.sort((a, b) => a.at - b.at).forEach((m) => m.deliver(now));
 
-    // 2) the server simulates up to now, broadcasting every 4th tick
+    // 2) the server simulates up to now, broadcasting on snapshot ticks, and at once when the phase changes
     while ((server.tick + 1) * STEP_MS <= now && !server.over) {
+      const phase = server.g.phase;
       server.step();
-      truth.set(server.tick, server.snapshot());
-      if (server.tick % 4 === 0 || server.over) {
-        const s = server.snapshot();
+      const rhythm = server.tick % every === 0;
+      const event = !rhythm && ((events && server.g.phase !== phase) || server.over);
+      const s = event ? server.sync() : server.snapshot();
+      truth.set(server.tick, s);
+      if (rhythm || event) {
         for (const c of clients) {
-          send((arrived) => {
-            const rally = c.predictor.g.phase === 'play' && s.phase === 'play';
-            const mine = c.side === 0 ? 0 : 1;
-            const before = [...c.predictor.offsets[mine]];
-            c.clock.observe(s.tick, arrived);
-            c.predictor.receive(s);
-            const o = c.predictor.offsets[mine];
-            if (rally) ownError = Math.max(ownError, Math.hypot(o[0] - before[0], o[1] - before[1]));
-          }, now);
+          send(
+            (arrived) => {
+              const rally = c.predictor.g.phase === 'play' && s.phase === 'play';
+              const mine = c.side === 0 ? 0 : 1;
+              const before = [...c.predictor.offsets[mine]];
+              c.clock.observe(s.tick, arrived);
+              c.predictor.receive(s);
+              const o = c.predictor.offsets[mine];
+              if (rally) ownError = Math.max(ownError, Math.hypot(o[0] - before[0], o[1] - before[1]));
+            },
+            now,
+            `down:${c.side}`,
+          );
         }
       }
     }
@@ -137,23 +159,42 @@ function simulate({ latency, jitter, seed }: NetOptions) {
       // Like a browser frame: read the keys once, then catch up to the target tick.
       const bits = c.bot(c.predictor.g);
       const tick = c.predictor.advanceTo(c.clock.target(now), bits);
-      predicted.set(`${c.side}:${c.predictor.tick}`, c.predictor.g.ball.x);
-      if (tick !== null) send(() => server.input(c.side as Side, tick, bits), now);
+      if (tick === null) continue;
+      send(
+        (arrived) => {
+          // Like RoomCore: schedule it, and relay it to the other browser right away.
+          const applied = server.input(c.side as Side, tick, bits);
+          if (applied.result === 'ahead' || !relay) return;
+          const rival = clients[c.side === 0 ? 1 : 0];
+          send(() => rival.predictor.opponentInput(applied.tick, bits), arrived, `down:${rival.side}`);
+        },
+        now,
+        `up:${c.side}`,
+      );
       c.predictor.smooth(0.001);
+    }
+    // 4) what each screen shows at the end of this millisecond
+    for (const c of clients) {
+      if (!c.predictor.ready) continue;
+      const g = c.predictor.g;
+      shown.set(`${c.side}:${c.predictor.tick}`, [g.ball.x, (c.side === 0 ? g.cpu : g.player).x]);
     }
   }
 
-  for (const [key, x] of predicted) {
-    const s = truth.get(Number(key.split(':')[1]));
+  for (const [key, [ball, opponent]] of shown) {
+    const [side, tick] = key.split(':').map(Number);
+    const s = truth.get(tick);
     if (s?.phase !== 'play') continue;
-    ballError += Math.abs(x - s.bodies[8]);
-    ballSamples++;
+    ballError += Math.abs(ball - s.bodies[8]);
+    opponentError += Math.abs(opponent - s.bodies[side === 0 ? 4 : 0]);
+    samples++;
   }
   return {
     over: server.over,
     score: server.g.score,
     ownError,
-    ballError: ballError / ballSamples,
+    ballError: ballError / samples,
+    opponentError: opponentError / samples,
     clientScores: clients.map((c) => c.predictor.g.score),
   };
 }
@@ -176,13 +217,53 @@ describe('prediction + reconciliation over a simulated network', () => {
     expect(r.clientScores).toEqual([r.score, r.score]);
   });
 
-  it('still plays a sane match across the Atlantic (150 ms each way, 50 ms jitter)', () => {
+  it('still plays a sane match across the Atlantic (150 ms each way, 50 ms jitter), own moves exact', () => {
     const r = simulate({ latency: 150, jitter: 50, seed: 4 });
     expect(r.over).toBe(true);
-    // Own moves can get corrected here, right after a serve: when the serve reset happens depends on
-    // where the *other* player sent the ball, and at this latency that falls inside the prediction window.
-    expect(r.ballError).toBeLessThan(30);
+    expect(r.ownError).toBeLessThan(0.01);
+    expect(r.ballError).toBeLessThan(8);
     expect(r.clientScores).toEqual([r.score, r.score]);
+  });
+
+  it('shows the ball and the opponent closer to the truth with relayed keys and 60 snapshots/s', () => {
+    // The old scheme: 30 snapshots/s, the opponent's keys only from snapshots, points on the next snapshot tick.
+    const before = simulate({ latency: 80, jitter: 30, seed: 5, relay: false, every: 4, events: false });
+    const after = simulate({ latency: 80, jitter: 30, seed: 5 });
+    expect(after.ballError).toBeLessThan(before.ballError * 0.75);
+    expect(after.opponentError).toBeLessThan(before.opponentError * 0.8);
+  });
+
+  it('replays from the last snapshot when a relayed key change of the opponent lands in the past', () => {
+    const server = new OnlineMatch(0);
+    for (let i = 0; i < 120; i++) server.step(); // into the rally
+    const p = new Predictor(0);
+    p.receive(server.snapshot());
+    for (let i = 0; i < 20; i++) p.advance(0); // 20 ticks ahead, the opponent assumed idle
+    // The opponent (right) actually started walking left 5 ticks after the snapshot.
+    const at = server.tick + 5;
+    server.input(1, at, KEY.LEFT);
+    for (let i = 0; i < 20; i++) server.step();
+    p.opponentInput(at, KEY.LEFT);
+    expect(p.tick).toBe(server.tick);
+    // Exactly the server's state (bit for bit: same steps, same rounding), before any snapshot says so.
+    expect(takeSnapshot(p.g, p.tick, [0, 0])).toEqual(takeSnapshot(server.g, server.tick, [0, 0]));
+    expect(p.g.ball).toEqual(server.g.ball);
+    // A change still in the future of the prediction is just kept for when we get there.
+    p.opponentInput(p.tick + 10, 0);
+    expect(p.g.cpu.x).toBe(server.g.cpu.x);
+  });
+
+  it('ignores a snapshot older than the one it already has', () => {
+    const server = new OnlineMatch(0);
+    const p = new Predictor(0);
+    for (let i = 0; i < 40; i++) server.step();
+    const old = server.snapshot();
+    for (let i = 0; i < 10; i++) server.step();
+    p.receive(server.snapshot());
+    for (let i = 0; i < 5; i++) p.advance(0);
+    const x = p.g.player.x;
+    p.receive(old);
+    expect(p.g.player.x).toBe(x);
   });
 
   it('starts from the first snapshot it gets and follows a server that is ahead', () => {

@@ -12,11 +12,11 @@ import type { RatingChange } from './elo';
  */
 
 /** Bumped on any incompatible change; an old tab is told to reload. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export const NET = {
-  /** One authoritative snapshot every 4 physics steps: 120 Hz / 4 = 30 per second. */
-  SNAPSHOT_EVERY: 4,
+  /** One authoritative snapshot every 2 physics steps: 120 Hz / 2 = 60 per second. */
+  SNAPSHOT_EVERY: 2,
   /** 3-2-1 before a match (and before resuming a paused one). */
   COUNTDOWN_MS: 3000,
   /** How long a dropped player's seat is held (the match stays paused meanwhile). */
@@ -92,7 +92,8 @@ export interface Snapshot {
   inputs: [number, number];
 }
 
-const round = (n: number) => Math.round(n * 1000) / 1000;
+/** To 1/1000 (and never −0, so the binary snapshot below decodes to exactly the same numbers). */
+const round = (n: number) => Math.round(n * 1000) / 1000 + 0;
 
 export function takeSnapshot(g: GameState, tick: number, inputs: [number, number]): Snapshot {
   const bodies: number[] = [];
@@ -189,6 +190,8 @@ export type ServerMessage =
   | { t: 'welcome'; side: Side; token: string; room: RoomView }
   | { t: 'room'; room: RoomView }
   | { t: 'state'; s: Snapshot }
+  /** The opponent changed keys, effective from `tick` (relayed the moment the server gets it). */
+  | { t: 'opp'; tick: number; bits: number }
   | { t: 'pong'; c: number }
   | { t: 'error'; code: ErrorCode };
 
@@ -242,6 +245,10 @@ export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | n
 
 /** The browser trusts its own server; this only guards against a garbled frame. */
 export function parseServerMessage(raw: unknown): ServerMessage | null {
+  if (raw instanceof ArrayBuffer) {
+    const s = decodeSnapshot(raw);
+    return s ? { t: 'state', s } : null;
+  }
   if (typeof raw !== 'string') return null;
   try {
     const m = JSON.parse(raw) as ServerMessage;
@@ -265,4 +272,80 @@ export interface OnlineRankingResponse {
   top: OnlineRankingEntry[];
   /** With `?me=<sha-256 of the player id>`: that player's standing (null if never rated). */
   me?: (OnlineRankingEntry & { position: number }) | null;
+}
+
+/** What goes over the socket: `state` as a binary frame (below), everything else as JSON text. */
+export function encodeServerMessage(msg: ServerMessage): string | ArrayBuffer {
+  return msg.t === 'state' ? encodeSnapshot(msg.s) : JSON.stringify(msg);
+}
+
+// ---------------------------------------------------------------- binary snapshot
+
+/**
+ * `state` messages travel as a binary frame (docs/volei-online.md, "Snapshot binário"):
+ * 68 bytes instead of ~200 of JSON, 60 times a second. Every number in a
+ * snapshot is already rounded to 1/1000, so storing it as an integer ×1000
+ * and dividing back gives exactly the same double: the quantization rule
+ * (server and clients bit-identical) still holds.
+ *
+ *   u8 kind (1) · u32 tick · 12 × i32 bodies ×1000 · u8 score[0] · u8 score[1] · u8 phase
+ *   · i32 phaseTime ×1000 · i32 matchTime ×1000 · u8 server · u8 lastScorer (255 = none)
+ *   · u8 inputs[0] · u8 inputs[1]
+ */
+const SNAPSHOT_KIND = 1;
+const PHASES: Phase[] = ['title', 'serve', 'play', 'point', 'over'];
+export const SNAPSHOT_BYTES = 1 + 4 + 12 * 4 + 3 + 4 + 4 + 2 + 2;
+
+const milli = (n: number) => Math.round(n * 1000);
+
+export function encodeSnapshot(s: Snapshot): ArrayBuffer {
+  const buf = new ArrayBuffer(SNAPSHOT_BYTES);
+  const v = new DataView(buf);
+  let o = 0;
+  v.setUint8(o, SNAPSHOT_KIND);
+  v.setUint32((o += 1), s.tick);
+  o += 4;
+  for (const n of s.bodies) {
+    v.setInt32(o, milli(n));
+    o += 4;
+  }
+  v.setUint8(o++, s.score[0]);
+  v.setUint8(o++, s.score[1]);
+  v.setUint8(o++, PHASES.indexOf(s.phase));
+  v.setInt32(o, milli(s.phaseTime));
+  v.setInt32((o += 4), milli(s.matchTime));
+  o += 4;
+  v.setUint8(o++, s.server);
+  v.setUint8(o++, s.lastScorer ?? 255);
+  v.setUint8(o++, s.inputs[0]);
+  v.setUint8(o, s.inputs[1]);
+  return buf;
+}
+
+export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
+  if (buf.byteLength !== SNAPSHOT_BYTES) return null;
+  const v = new DataView(buf);
+  if (v.getUint8(0) !== SNAPSHOT_KIND) return null;
+  let o = 5;
+  const bodies: number[] = [];
+  for (let i = 0; i < 12; i++, o += 4) bodies.push(v.getInt32(o) / 1000 + 0);
+  const score: [number, number] = [v.getUint8(o), v.getUint8(o + 1)];
+  const phase = PHASES[v.getUint8(o + 2)];
+  if (!phase) return null;
+  o += 3;
+  const phaseTime = v.getInt32(o) / 1000 + 0;
+  const matchTime = v.getInt32(o + 4) / 1000 + 0;
+  o += 8;
+  const scorer = v.getUint8(o + 1);
+  return {
+    tick: v.getUint32(1),
+    bodies,
+    score,
+    phase,
+    phaseTime,
+    matchTime,
+    server: v.getUint8(o) as Side,
+    lastScorer: scorer === 255 ? null : (scorer as Side),
+    inputs: [v.getUint8(o + 2), v.getUint8(o + 3)],
+  };
 }

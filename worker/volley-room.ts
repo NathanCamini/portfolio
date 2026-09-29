@@ -44,7 +44,9 @@ export class VolleyRoom implements DurableObject {
   private core: RoomCore | null = null;
   private readonly conns = new Map<WebSocket, Conn>();
   private readonly timers = new Map<TimerName, ReturnType<typeof setTimeout>>();
-  private loop: ReturnType<typeof setInterval> | null = null;
+  private loop: ReturnType<typeof setTimeout> | null = null;
+  /** The match loop is wanted (setLoop(true)); the timer re-arms itself while it is. */
+  private looping = false;
 
   private readonly host: RoomHost = {
     now: () => Date.now(),
@@ -63,10 +65,13 @@ export class VolleyRoom implements DurableObject {
         }, ms),
       );
     },
+    // The loop sleeps exactly until the next snapshot tick is due (RoomCore.loop says how long), so a
+    // snapshot leaves as soon as its tick is simulated instead of up to a 60 Hz interval later.
     setLoop: (running) => {
-      if (running && !this.loop) this.loop = setInterval(() => this.core?.loop(), 1000 / 60);
+      this.looping = running;
+      if (running && !this.loop) this.schedule(0);
       else if (!running && this.loop) {
-        clearInterval(this.loop);
+        clearTimeout(this.loop);
         this.loop = null;
       }
     },
@@ -154,6 +159,15 @@ export class VolleyRoom implements DurableObject {
     await this.ctx.storage.deleteAll();
   }
 
+  private schedule(ms: number) {
+    this.loop = setTimeout(() => {
+      this.loop = null;
+      const next = this.core?.loop();
+      // loop() may have stopped the loop (final whistle) or restarted it: only re-arm if wanted and not armed.
+      if (next !== undefined && this.looping && !this.loop) this.schedule(next);
+    }, ms);
+  }
+
   private gone(ws: WebSocket) {
     const conn = this.conns.get(ws) ?? this.connFor(ws);
     this.conns.delete(ws);
@@ -168,9 +182,9 @@ export class VolleyRoom implements DurableObject {
     const conn: Conn = {
       id: attachment.id,
       ip: attachment.ip,
-      send: (msg) => {
+      send: (data) => {
         try {
-          ws.send(JSON.stringify(msg));
+          ws.send(data);
         } catch {
           // The socket is already closing: the close event will tell the room.
         }
