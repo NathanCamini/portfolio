@@ -3,14 +3,24 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { rememberedName, rememberName } from '@/components/ranking/useRanking';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import type { OnlineStrings } from '@/i18n/types';
+import type { OnlineErrorKey, OnlineStrings } from '@/i18n/types';
 import { useI18n } from '@/i18n/I18nProvider';
 import { checkNickname, NAME_MAX, type NameProblem } from '@/lib/ranking/nickname';
-import { isRoomCode, normalizeRoomCode, ROOM_CODE_LENGTH, type RoomView } from '@/lib/volley-online/protocol';
+import type { RatingChange } from '@/lib/volley-online/elo';
+import {
+  isRoomCode,
+  normalizeRoomCode,
+  ROOM_CODE_LENGTH,
+  type OnlineRankingEntry,
+  type OnlineRankingResponse,
+  type RoomView,
+} from '@/lib/volley-online/protocol';
+import { Trophy } from '@/components/ui/icons';
 import type { Side } from '../engine/types';
 import { TouchPad } from '../TouchPad';
 import panel from '../VolleyballGame.module.css';
 import { roomLink } from './link';
+import { playerHash } from './player';
 import { useOnlineVolley } from './useOnlineVolley';
 import styles from './OnlineVolley.module.css';
 
@@ -59,6 +69,10 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isTouch = useMediaQuery('(pointer: coarse)');
+  /** The start card's "Online ranking" view. */
+  const [board, setBoard] = useState(false);
+  /** The nickname being typed: kept here, so it survives a look at the ranking (the start card unmounts). */
+  const [draftName, setDraftName] = useState(rememberedName);
   const {
     status,
     room,
@@ -117,10 +131,19 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
         <Searching since={searchingSince} on={on} onCancel={cancel} />
       </Card>
     );
+  } else if (status === 'idle' && board) {
+    overlay = (
+      <Card>
+        <Board on={on} onBack={() => setBoard(false)} />
+      </Card>
+    );
   } else if (status === 'idle' || status === 'working') {
     overlay = (
       <Card>
         <StartCard
+          onRanking={() => setBoard(true)}
+          name={draftName}
+          setName={setDraftName}
           on={on}
           nameErrors={t.ranking.errors}
           busy={status === 'working'}
@@ -150,6 +173,7 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
     overlay = (
       <Card>
         <RoomHeader code={room.code} on={on} kicker={quickMatch ? on.found : undefined} />
+        <p className={`${styles.badge} ${room.rated ? styles.rated : ''}`}>{room.rated ? on.rated : on.friendly}</p>
         {/* A stranger's room from the queue isn't one to share. */}
         {!quickMatch && <ShareLink code={room.code} on={on} />}
         <Seats room={room} side={me} on={on} />
@@ -190,6 +214,13 @@ export function OnlineVolley({ panelRef, joinCode, onChrome }: Props) {
           <p className={styles.sub}>
             {on.series}: {room.wins[me]} × {room.wins[them]}
           </p>
+          {room.result.ratings ? (
+            <RatingLine change={room.result.ratings[me]} on={on} />
+          ) : !room.rated ? (
+            <p className={styles.sub}>{on.friendly}</p>
+          ) : (
+            !room.result.counted && <p className={styles.sub}>{on.notCounted}</p>
+          )}
         </header>
         <Seats room={room} side={me} on={on} />
         <Ready room={room} side={me} on={on} label={on.again} setReady={setReady} leave={leave} />
@@ -335,6 +366,7 @@ function Seats({ room, side, on }: { room: RoomView; side: Side; on: OnlineStrin
               <span className={styles.name}>
                 {seat.name}
                 {i === side && <span className={styles.you}> · {on.you}</span>}
+                {seat.rating !== null && <span className={styles.rating}> · {seat.rating}</span>}
               </span>
             ) : (
               <span className={styles.empty}>{on.waitingSeat}</span>
@@ -394,7 +426,92 @@ function Ready({
   );
 }
 
+/** "Rating: 1016 (+16)" after a rated match. */
+function RatingLine({ change, on }: { change: RatingChange; on: OnlineStrings }) {
+  const delta = change.after - change.before;
+  return (
+    <p className={`${styles.ratingLine} ${delta >= 0 ? styles.up : styles.down}`}>
+      {on.ratingChange.replace('{after}', String(change.after)).replace('{delta}', `${delta >= 0 ? '+' : ''}${delta}`)}
+    </p>
+  );
+}
+
+type BoardState =
+  { kind: 'loading' } | { kind: 'error'; error: OnlineErrorKey } | { kind: 'ready'; data: OnlineRankingResponse };
+
+/** The online ranking: top 10 by rating, and where this browser's player stands. */
+function Board({ on, onBack }: { on: OnlineStrings; onBack: () => void }) {
+  const [state, setState] = useState<BoardState>({ kind: 'loading' });
+  const backRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true });
+    let live = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/volley/ratings?me=${await playerHash()}`, { cache: 'no-store' });
+        if (!live) return;
+        if (!res.ok) return setState({ kind: 'error', error: res.status === 503 ? 'unavailable' : 'network' });
+        const data = (await res.json()) as OnlineRankingResponse;
+        if (live) setState({ kind: 'ready', data });
+      } catch {
+        if (live) setState({ kind: 'error', error: 'network' });
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const me = state.kind === 'ready' ? state.data.me : null;
+  const record = (e: OnlineRankingEntry) =>
+    on.record.replace('{wins}', String(e.wins)).replace('{games}', String(e.games));
+
+  return (
+    <div className={styles.boardCard}>
+      <header>
+        <h3 className={styles.title}>{on.ranking}</h3>
+        <p className={styles.sub}>{on.rankingHelp}</p>
+      </header>
+      {state.kind === 'loading' && (
+        <p className={styles.status} role="status">
+          <span className={styles.spinner} aria-hidden="true" />
+        </p>
+      )}
+      {state.kind === 'error' && <p className={styles.error}>{on.errors[state.error]}</p>}
+      {state.kind === 'ready' &&
+        (state.data.top.length === 0 ? (
+          <p className={styles.note}>{on.rankingEmpty}</p>
+        ) : (
+          <ol className={styles.board}>
+            {state.data.top.map((e, i) => (
+              <li key={`${i}-${e.name}`} className={me && me.position === i + 1 ? styles.mine : undefined}>
+                <span className={styles.rank}>{i + 1}</span>
+                <span className={styles.name}>{e.name}</span>
+                <span className={styles.line}>{record(e)}</span>
+                <span className={styles.score}>{e.rating}</span>
+              </li>
+            ))}
+          </ol>
+        ))}
+      {me && me.position > (state.kind === 'ready' ? state.data.top.length : 0) && (
+        <p className={styles.meRow}>
+          {on.position.replace('{n}', String(me.position))} · {me.name} · {me.rating} · {record(me)}
+        </p>
+      )}
+      <div className={styles.actions}>
+        <button ref={backRef} type="button" className="btn btn-secondary" onClick={onBack}>
+          {on.back}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StartCard({
+  onRanking,
+  name,
+  setName,
   on,
   nameErrors,
   busy,
@@ -412,13 +529,15 @@ function StartCard({
   onCreate: (name: string) => void;
   onQuick: (name: string) => void;
   onJoin: (code: string, name: string) => void;
+  onRanking: () => void;
+  name: string;
+  setName: (name: string) => void;
 }) {
   const titleId = useId();
   const nameId = useId();
   const codeId = useId();
   const errorId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState(rememberedName);
   const [code, setCode] = useState(initialCode);
   const [problem, setProblem] = useState<NameProblem | 'code' | null>(null);
 
@@ -469,9 +588,15 @@ function StartCard({
   return (
     <form className={styles.start} onSubmit={submit} noValidate aria-labelledby={titleId} aria-busy={busy}>
       <header>
-        <h3 id={titleId} className={styles.title}>
-          {on.title}
-        </h3>
+        <div className={styles.titleRow}>
+          <h3 id={titleId} className={styles.title}>
+            {on.title}
+          </h3>
+          <button type="button" className={`btn btn-secondary ${styles.small}`} onClick={onRanking} disabled={busy}>
+            <Trophy size={13} />
+            {on.ranking}
+          </button>
+        </div>
         <p className={styles.sub}>{on.intro}</p>
       </header>
 

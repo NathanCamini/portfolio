@@ -1,4 +1,5 @@
 import { MatchQueue, type QueueConn, type QueueEntry, type QueueHost } from '../src/lib/volley-online/queue';
+import { ratingOf } from './ratings';
 import { openRoom, type VolleyEnv } from './volley';
 
 /**
@@ -27,7 +28,8 @@ export class VolleyQueue implements DurableObject {
   ) {
     const host: QueueHost = {
       now: () => Date.now(),
-      openRoom: () => (env.VOLLEY_ROOMS ? openRoom(env.VOLLEY_ROOMS) : Promise.resolve(null)),
+      openRoom: () => (env.VOLLEY_ROOMS ? openRoom(env.VOLLEY_ROOMS, true) : Promise.resolve(null)),
+      rating: (pid) => (env.DB ? ratingOf(env.DB, pid) : Promise.resolve(null)),
       setTimer: (name, ms) => {
         const running = this.timers.get(name);
         if (running !== undefined) clearTimeout(running);

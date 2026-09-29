@@ -91,7 +91,8 @@ em dobro.
 (`/#volei-CÓDIGO`) e as duas jogam em tempo real até 7 pontos.
 Cada sala é um **Durable Object** que roda a física a 120 Hz e é o juiz da partida (servidor autoritativo), e cada
 navegador **prevê** o jogo para responder ao teclado na hora, corrigindo-se pelos 30 estados por segundo que o
-servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). O deploy cria
+servidor manda. Quem cai no meio da partida volta para a mesma cadeira (a partida pausa por até 15 s). A partida
+rápida vale **ranking online (Elo)**, gravado pelo servidor no D1, e a fila junta gente de nível parecido. O deploy cria
 os Durable Objects (salas e fila) sozinho, pelas migrations do `wrangler.jsonc`; previews não têm salas e mostram o online como
 indisponível. Arquitetura, protocolo, netcode (com medições de 0 a 250 ms de latência), limites, custos e testes:
 **[docs/volei-online.md](docs/volei-online.md)**.

@@ -1,6 +1,7 @@
 import { TIMING } from '../../components/volleyball/engine/constants';
 import type { Side } from '../../components/volleyball/engine/types';
 import { checkNickname } from '../ranking/nickname';
+import { ELO, type RatingChange } from './elo';
 import { OnlineMatch } from './match';
 import {
   NET,
@@ -38,6 +39,16 @@ export interface Conn {
   close(code: number, reason: string): void;
   /** Remember which seat this socket holds, so the room can be rebuilt after the object hibernates. */
   bind(side: Side | null): void;
+  /** The client's IP when known: two seats from one address don't play for rating. */
+  readonly ip?: string;
+}
+
+/** A finished rated match, for the host to save (worker/ratings.ts). */
+export interface RatedResult {
+  /** Each side's player id (the browser's secret; the host stores only a hash of it). */
+  pids: [string, string];
+  names: [string, string];
+  winner: Side;
 }
 
 export type TimerName = `hello:${string}` | 'countdown' | `grace:${Side}`;
@@ -54,17 +65,27 @@ export interface RoomHost {
   setLoop(running: boolean): void;
   /** The lobby's durable part changed (seats, wins); the match itself isn't persisted. */
   persist(state: PersistedRoom): void;
+  /** Rated rooms: a player's current rating (null = never rated: they start at ELO.START). */
+  rating(pid: string): Promise<number | null>;
+  /** Rated rooms: saves the result and returns both players' change (null if it couldn't be saved). */
+  record(result: RatedResult): Promise<[RatingChange, RatingChange] | null>;
 }
 
 export interface PersistedSeat {
   name: string;
   token: string;
   ready: boolean;
+  /** The browser's player id (rated rooms), its IP and rating, as of the hello. */
+  pid?: string;
+  ip?: string;
+  rating?: number | null;
 }
 
 export interface PersistedRoom {
   code: string;
   createdAt: number;
+  /** Opened by the quick-match queue: results count for the online ranking. */
+  rated?: boolean;
   phase: RoomPhase;
   seats: [PersistedSeat | null, PersistedSeat | null];
   wins: [number, number];
@@ -76,8 +97,8 @@ interface Seat extends PersistedSeat {
   ping: number | null;
 }
 
-export function newRoom(code: string, now: number): PersistedRoom {
-  return { code, createdAt: now, phase: 'waiting', seats: [null, null], wins: [0, 0], result: null };
+export function newRoom(code: string, now: number, rated = false): PersistedRoom {
+  return { code, createdAt: now, rated, phase: 'waiting', seats: [null, null], wins: [0, 0], result: null };
 }
 
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
@@ -85,6 +106,7 @@ const other = (side: Side): Side => (side === 0 ? 1 : 0);
 export class RoomCore {
   readonly code: string;
   readonly createdAt: number;
+  readonly rated: boolean;
   private phase: RoomPhase;
   private seats: [Seat | null, Seat | null];
   private wins: [number, number];
@@ -103,6 +125,7 @@ export class RoomCore {
   ) {
     this.code = saved.code;
     this.createdAt = saved.createdAt;
+    this.rated = saved.rated ?? false;
     this.wins = [saved.wins[0], saved.wins[1]];
     this.result = saved.result;
     this.seats = [0, 1].map((i) => (saved.seats[i] ? { ...saved.seats[i]!, conn: null, ping: null } : null)) as [
@@ -197,9 +220,10 @@ export class RoomCore {
       code: this.code,
       phase: this.phase,
       seats: this.seats.map((s) =>
-        s ? { name: s.name, connected: !!s.conn, ready: s.ready, ping: s.ping } : null,
+        s ? { name: s.name, connected: !!s.conn, ready: s.ready, ping: s.ping, rating: s.rating ?? null } : null,
       ) as RoomView['seats'],
       remainingMs: this.deadline === null ? null : Math.max(0, this.deadline - now),
+      rated: this.rated,
       live: this.match !== null,
       wins: [this.wins[0], this.wins[1]],
       result: this.result,
@@ -210,7 +234,7 @@ export class RoomCore {
 
   private dispatch(conn: Conn, m: ClientMessage) {
     if (m.t === 'ping') return this.ping(conn, m.c, m.rtt);
-    if (m.t === 'hello') return this.hello(conn, m.v, m.name, m.token);
+    if (m.t === 'hello') return this.hello(conn, m.v, m.name, m.token, m.pid);
     const side = this.sideOf(conn);
     if (side === null) return this.fail(conn, 'bad_message'); // must say hello first
     if (m.t === 'ready') this.ready(side, m.ready);
@@ -218,7 +242,7 @@ export class RoomCore {
     else this.leave(side, conn);
   }
 
-  private hello(conn: Conn, version: number, rawName: string, token?: string) {
+  private hello(conn: Conn, version: number, rawName: string, token?: string, pid?: string) {
     if (this.sideOf(conn) !== null) return; // already seated
     if (version !== PROTOCOL_VERSION) return this.fail(conn, 'bad_version');
     const nick = checkNickname(rawName);
@@ -240,7 +264,17 @@ export class RoomCore {
     } else {
       side = !this.seats[0] ? 0 : !this.seats[1] ? 1 : null;
       if (side === null) return this.fail(conn, 'room_full');
-      this.seats[side] = { name: nick.name, token: this.host.randomToken(), ready: false, conn, ping: null };
+      this.seats[side] = {
+        name: nick.name,
+        token: this.host.randomToken(),
+        ready: false,
+        conn,
+        ping: null,
+        pid,
+        ip: conn.ip,
+        rating: null,
+      };
+      if (this.rated && pid) this.lookUpRating(side, pid);
     }
 
     this.pending.delete(conn.id);
@@ -349,11 +383,56 @@ export class RoomCore {
     this.changed();
   }
 
+  /** Shows the player's rating in the lobby as soon as storage answers. */
+  private lookUpRating(side: Side, pid: string) {
+    void this.host
+      .rating(pid)
+      .catch(() => null)
+      .then((rating) => {
+        const seat = this.seats[side];
+        if (seat?.pid !== pid) return; // left meanwhile
+        seat.rating = rating ?? ELO.START;
+        this.changed();
+      });
+  }
+
+  /**
+   * A rated result needs a rated room, two identified players who aren't the
+   * same browser, and (when known) two different addresses: otherwise one
+   * person with two tabs could farm points off themselves.
+   */
+  private ratable(): RatedResult['pids'] | null {
+    const [a, b] = this.seats;
+    if (!this.rated || !a?.pid || !b?.pid || a.pid === b.pid) return null;
+    if (a.ip && b.ip && a.ip === b.ip) return null;
+    return [a.pid, b.pid];
+  }
+
   private finish(winner: Side, forfeit: boolean) {
     const score = this.match!.g.score;
     this.wins[winner]++;
     const names = this.seats.map((s) => s?.name ?? '') as [string, string];
-    this.result = { winner, score: [score[0], score[1]], forfeit, names };
+    const pids = this.ratable();
+    const result: NonNullable<RoomView['result']> = {
+      winner,
+      score: [score[0], score[1]],
+      forfeit,
+      names,
+      counted: pids !== null,
+      ratings: null,
+    };
+    this.result = result;
+    if (pids) {
+      void this.host
+        .record({ pids, names, winner })
+        .catch(() => null)
+        .then((ratings) => {
+          if (!ratings || this.result !== result) return;
+          result.ratings = ratings;
+          this.seats.forEach((s, i) => s?.pid === pids[i] && (s.rating = ratings[i].after));
+          this.changed();
+        });
+    }
     this.match = null;
     this.host.setLoop(false);
     this.host.setTimer('countdown', null);
@@ -394,8 +473,9 @@ export class RoomCore {
       code: this.code,
       createdAt: this.createdAt,
       phase: this.phase,
+      rated: this.rated,
       seats: this.seats.map((s) =>
-        s ? { name: s.name, token: s.token, ready: s.ready } : null,
+        s ? { name: s.name, token: s.token, ready: s.ready, pid: s.pid, ip: s.ip, rating: s.rating } : null,
       ) as PersistedRoom['seats'],
       wins: [this.wins[0], this.wins[1]],
       result: this.result,
