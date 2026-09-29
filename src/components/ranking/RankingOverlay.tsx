@@ -224,7 +224,7 @@ export function RankingOverlay<G extends GameId>({
       body = (
         <>
           {boardTitle(view.game)}
-          {tabs(view.game)}
+          {GAMES.length > 1 && tabs(view.game)}
           {view.top ? (
             board(view.game, view.top)
           ) : (

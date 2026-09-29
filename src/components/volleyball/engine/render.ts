@@ -2,7 +2,7 @@ import type { GameStrings } from '@/i18n/types';
 import type { Palette } from '@/lib/palette';
 import { FIELD } from './constants';
 import { playerWon } from './physics';
-import type { Stage, StageId } from './stages';
+import type { Stage } from './stages';
 import type { Body, GameState } from './types';
 
 export interface View {
@@ -80,15 +80,7 @@ const sceneFor = (stage: Stage, C: Palette) => (stage.theme === 'bug' ? RED_ALER
  * (letterboxed) inside the stage, and everything is drawn with design tokens —
  * except the boss arena, where a bug has taken the night beach down: red alert.
  */
-export function renderGame(
-  ctx: CanvasRenderingContext2D,
-  g: GameState,
-  view: View,
-  C: Palette,
-  T: GameStrings,
-  /** Online: scoreboard labels for the left and right player (the left one is always "you", mirrored if needed). */
-  names?: [string, string],
-) {
+export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: View, C: Palette, T: GameStrings) {
   const { w, h, dpr } = view;
   const { W, H, GROUND, NET_X, NET_TOP, NET_W } = FIELD;
   const b = g.ball;
@@ -224,18 +216,17 @@ export function renderGame(
     }
   }
 
-  // Scoreboard. Endless shows how close the CPU is to ending the run.
-  const endless = g.stage.mode === 'endless';
+  // Scoreboard.
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = C.text;
   ctx.font = `500 48px ${FONT}`;
   ctx.fillText(String(g.score[0]), 400, 74);
-  ctx.fillText(endless ? `${g.score[1]}/${g.stage.limits[1]}` : String(g.score[1]), 560, 74);
+  ctx.fillText(String(g.score[1]), 560, 74);
   ctx.fillStyle = bug ? S.subtitle : C.n500;
   ctx.font = `500 12px ${FONT}`;
-  ctx.fillText(names?.[0] ?? T.you, 400, 96);
-  ctx.fillText(names?.[1] ?? (bug ? T.boss : T.cpu), 560, 96);
+  ctx.fillText(T.you, 400, 96);
+  ctx.fillText(bug ? T.boss : T.cpu, 560, 96);
   ctx.fillStyle = bug ? S.groundEdge : C.n700;
   ctx.fillRect(479, 44, 2, 34);
 
@@ -255,20 +246,17 @@ export function renderGame(
     }
   };
 
-  // Online, the page's cards (lobby, countdown, result) do the talking: the canvas only calls the points.
-  const online = g.stage.mode === 'online';
-  if (g.phase === 'title' && !online) {
-    const stageText = T.stages[g.stage.id as StageId];
+  if (g.phase === 'title') {
+    const stageText = T.stages[g.stage.id];
     banner(stageText.title, stageText.sub, T.start);
-  } else if (g.phase === 'over' && !online) {
+  } else if (g.phase === 'over') {
     const won = playerWon(g);
-    if (endless) banner(T.endlessOver.replace('{n}', String(g.score[0])), T.again);
-    else if (g.stage.id === 'boss') banner(won ? T.bossWin : T.bossLose, won ? T.rematch : T.retry);
+    if (g.stage.id === 'boss') banner(won ? T.bossWin : T.bossLose, won ? T.rematch : T.retry);
     else banner(won ? T.phaseClear : T.lose, won ? T.toBoss : T.retry);
   } else if (g.phase === 'point') {
     ctx.fillStyle = g.lastScorer === 0 ? C.a300 : bug ? S.title : C.n300;
     ctx.font = `500 26px ${FONT}`;
-    const theirs = online ? T.onlinePoint.replace('{name}', names?.[1] ?? T.cpu) : bug ? T.pBoss : T.pCpu;
+    const theirs = bug ? T.pBoss : T.pCpu;
     ctx.fillText(g.lastScorer === 0 ? T.pYou : theirs, W / 2, 200);
   }
 }

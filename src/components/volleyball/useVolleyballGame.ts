@@ -6,26 +6,19 @@ import { readPalette } from '@/lib/palette';
 import { TIMING } from './engine/constants';
 import { createGame, playerWon, primaryAction, stepGame } from './engine/physics';
 import { renderGame, type View } from './engine/render';
-import type { Stage, StageId } from './engine/stages';
+import type { StageId } from './engine/stages';
 import type { GameState, Input } from './engine/types';
 
 export type GameKey = keyof Input;
 
-/** This loop only plays the local stages; the online match has its own (online/useOnlineVolley.ts). */
-const localStage = (stage: Stage) => stage.id as StageId;
-
-/** The final whistle of any stage. */
+/** The final whistle of a campaign phase. */
 export interface MatchEnd {
   stage: StageId;
-  /** Points the player scored (the Endless result). */
-  points: number;
-  /** The player reached the stage's win score (never in Endless). */
+  /** The player reached the stage's win score. */
   won: boolean;
-  /** The engine's match clock. */
-  durationMs: number;
 }
 
-/** Arrows or WASD to move, up / W / space to jump (the online match uses the same keys). */
+/** Arrows or WASD to move, up / W / space to jump. */
 export const KEYMAP: Record<string, GameKey> = {
   ArrowLeft: 'left',
   a: 'left',
@@ -44,12 +37,8 @@ interface Options {
   stageRef: RefObject<HTMLElement | null>;
   panelRef: RefObject<HTMLElement | null>;
   strings: GameStrings;
-  /** Stage shown when the game mounts (the panel remounts it on a mode switch). */
+  /** Stage shown when the game mounts (where the campaign stopped last time). */
   initialStage: StageId;
-  /** An overlay (leaderboard) is open: simulation paused, keys left to the page, no new match. */
-  locked: boolean;
-  /** A new match just kicked off. */
-  onKickoff: (stage: StageId) => void;
   /** The engine moved on to another stage's title screen (phase 1 won → the boss). */
   onStage: (stage: StageId) => void;
   onFinish: (end: MatchEnd) => void;
@@ -64,8 +53,8 @@ interface Options {
  * - Game state and input live in refs: 60+ updates/s never touch React.
  * - Keyboard is only captured while the panel is on screen (or fullscreen),
  *   so arrows/space keep scrolling the page everywhere else.
- * - Kickoff, stage changes and the final whistle are reported to the caller
- *   (campaign progress, ranking tickets).
+ * - Stage changes and the final whistle are reported to the caller
+ *   (campaign progress, confetti, the call to the full game).
  */
 export function useVolleyballGame({
   canvasRef,
@@ -73,37 +62,28 @@ export function useVolleyballGame({
   panelRef,
   strings,
   initialStage,
-  locked,
-  onKickoff,
   onStage,
   onFinish,
 }: Options) {
   const game = useRef<GameState | null>(null);
   const input = useRef<Input>({ left: false, right: false, jump: false });
   const stringsRef = useRef(strings);
-  const lockedRef = useRef(locked);
   const firstStage = useRef(initialStage);
-  const events = useRef({ onKickoff, onStage, onFinish });
+  const events = useRef({ onStage, onFinish });
 
   useEffect(() => {
     stringsRef.current = strings; // language switch mid-match updates the canvas copy
   }, [strings]);
 
   useEffect(() => {
-    lockedRef.current = locked;
-    if (locked) Object.assign(input.current, { left: false, right: false, jump: false });
-  }, [locked]);
-
-  useEffect(() => {
-    events.current = { onKickoff, onStage, onFinish };
+    events.current = { onStage, onFinish };
   });
 
-  /** Primary action, reporting what it did: a kickoff, or the move to the next campaign phase. */
+  /** Primary action, reporting a move to the next campaign phase. */
   const kick = useCallback((g: GameState) => {
-    const { phase, stage } = g;
+    const { stage } = g;
     primaryAction(g);
-    if (g.stage !== stage) events.current.onStage(localStage(g.stage));
-    else if (g.phase !== phase) events.current.onKickoff(localStage(g.stage));
+    if (g.stage !== stage) events.current.onStage(g.stage.id);
   }, []);
 
   useEffect(() => {
@@ -144,19 +124,14 @@ export function useVolleyballGame({
       const dt = Math.min((now - last) / 1000, TIMING.MAX_FRAME);
       last = now;
       if (!visible) return;
-      if (!lockedRef.current) acc += dt;
+      acc += dt;
       const before = g.phase;
       while (acc >= TIMING.STEP) {
         stepGame(g, TIMING.STEP, input.current);
         acc -= TIMING.STEP;
       }
       if (before !== 'over' && g.phase === 'over') {
-        events.current.onFinish({
-          stage: localStage(g.stage),
-          points: g.score[0],
-          won: playerWon(g),
-          durationMs: Math.round(g.matchTime),
-        });
+        events.current.onFinish({ stage: g.stage.id, won: playerWon(g) });
       }
       renderGame(ctx, g, view, palette, stringsRef.current);
     };
@@ -168,7 +143,7 @@ export function useVolleyballGame({
       return !!r && r.bottom >= 80 && r.top <= window.innerHeight - 80;
     };
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || lockedRef.current) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = KEYMAP[e.key];
       if (!k || !panelActive()) return;
       const target = e.target as HTMLElement | null;
@@ -198,7 +173,6 @@ export function useVolleyballGame({
 
   const press = useCallback(
     (k: GameKey) => {
-      if (lockedRef.current) return;
       input.current[k] = true;
       if (k === 'jump' && game.current) kick(game.current);
     },
@@ -208,11 +182,7 @@ export function useVolleyballGame({
     input.current[k] = false;
   }, []);
   const action = useCallback(() => {
-    if (!lockedRef.current && game.current) kick(game.current);
-  }, [kick]);
-  /** "Play again" from the overlay: starts a match even though the overlay is still closing. */
-  const restart = useCallback(() => {
     if (game.current) kick(game.current);
   }, [kick]);
-  return { press, release, action, restart };
+  return { press, release, action };
 }

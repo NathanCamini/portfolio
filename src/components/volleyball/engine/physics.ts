@@ -1,9 +1,9 @@
 import { updateCpu } from './ai';
 import { FIELD, PHYSICS, TIMING } from './constants';
-import { nextStage, STAGES, type StageKey } from './stages';
+import { nextStage, STAGES, type StageId } from './stages';
 import type { Body, GameState, Input, Side } from './types';
 
-export function createGame(stage: StageKey, rng: () => number = Math.random): GameState {
+export function createGame(stage: StageId, rng: () => number = Math.random): GameState {
   const { GROUND, PLAYER_HOME, CPU_HOME, SERVE_Y, W } = FIELD;
   const g: GameState = {
     player: { x: PLAYER_HOME, y: GROUND, vx: 0, vy: 0, r: PHYSICS.PLAYER_RADIUS },
@@ -26,7 +26,7 @@ export function createGame(stage: StageKey, rng: () => number = Math.random): Ga
 }
 
 /** Switches to another stage's title screen (mode change, or the next campaign phase). */
-export function setStage(g: GameState, id: StageKey) {
+export function setStage(g: GameState, id: StageId) {
   g.stage = STAGES[id];
   g.cpu.r = g.stage.cpu.radius;
   Object.assign(g.player, { x: FIELD.PLAYER_HOME, y: FIELD.GROUND, vx: 0, vy: 0 });
@@ -39,7 +39,7 @@ export function setStage(g: GameState, id: StageKey) {
   g.phaseTime = 0;
 }
 
-/** The player reached their limit (never happens in Endless, which has none). */
+/** The player reached the stage's winning score. */
 export const playerWon = (g: GameState) => g.score[0] >= g.stage.limits[0];
 
 /**
@@ -55,8 +55,8 @@ export function primaryAction(g: GameState) {
   if (g.phase === 'title' || g.phase === 'over') kickoff(g, 0);
 }
 
-/** Starts a match from 0–0, `side` serving. The online server calls it directly (it picks who serves). */
-export function kickoff(g: GameState, side: Side) {
+/** Starts a match from 0–0, `side` serving. */
+function kickoff(g: GameState, side: Side) {
   g.score = [0, 0];
   g.matchTime = 0;
   g.lastScorer = null;
@@ -160,12 +160,9 @@ function drive(p: Body, input: Input, g: GameState) {
  * Advances the simulation by `dt` seconds of real time (one fixed step).
  * `f` = the same step expressed in 60 fps frames, the unit all constants use.
  *
- * `input` drives the left player. The right one is the CPU, unless `opponent`
- * is given: then a second person drives it (online, docs/volei-online.md) and
- * the simulation uses no randomness at all, so a client replaying the same
- * inputs reaches the same state as the server.
+ * `input` drives the left player; the right one is the CPU.
  */
-export function stepGame(g: GameState, dt: number, input: Input, rng: () => number = Math.random, opponent?: Input) {
+export function stepGame(g: GameState, dt: number, input: Input, rng: () => number = Math.random) {
   const f = dt * 60;
   const ms = dt * 1000;
   const { player: p, cpu: c, ball: b } = g;
@@ -174,8 +171,7 @@ export function stepGame(g: GameState, dt: number, input: Input, rng: () => numb
   if (g.phase !== 'title' && g.phase !== 'over') g.matchTime += ms;
 
   drive(p, input, g);
-  if (opponent) drive(c, opponent, g);
-  else updateCpu(g, f, rng);
+  updateCpu(g, f, rng);
   movePlayer(p, f, p.r, NET_X - NET_W / 2 - p.r);
   movePlayer(c, f, NET_X + NET_W / 2 + c.r, W - c.r);
 

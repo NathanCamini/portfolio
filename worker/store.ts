@@ -2,11 +2,14 @@ import type { GameId, LeaderboardEntry, SubmitResponse } from '../src/lib/rankin
 import volleyRanking from '../migrations/0001_volley_ranking.sql';
 import volleyEndless from '../migrations/0002_volley_endless.sql';
 import ranking from '../migrations/0003_ranking.sql';
-import onlineRatings from '../migrations/0004_online_ratings.sql';
-import onlineLive from '../migrations/0005_online_live.sql';
 
-/** Every migration's statements, in order (none has `;` or `--` inside string literals). */
-const SCHEMA = [volleyRanking, volleyEndless, ranking, onlineRatings, onlineLive]
+/**
+ * The ranking's migrations' statements, in order (none has `;` or `--` inside
+ * string literals). 0004 and 0005 were the online volleyball's (Elo, live
+ * matches): that moved to its own site and database (NathanCamini/volleyball_game),
+ * so their tables are no longer created here; the files stay, as published migrations do.
+ */
+const SCHEMA = [volleyRanking, volleyEndless, ranking]
   .join(';')
   .replace(/--[^\n]*/g, '')
   .split(';')
