@@ -4,11 +4,13 @@ import { Predictor, TickClock } from '../../src/lib/volley-online/predictor';
 import {
   parseServerMessage,
   PROTOCOL_VERSION,
+  type OnlineRankingResponse,
   type RoomView,
   type ServerMessage,
 } from '../../src/lib/volley-online/protocol';
 import { parseQueueServerMessage, type QueueServerMessage } from '../../src/lib/volley-online/queue';
 import { seeded, sideBot } from '../../src/lib/volley-online/testing';
+import { hashPlayer } from '../ratings';
 
 /**
  * End to end against a running Worker (docs/volei-online.md, "Testes"):
@@ -42,15 +44,24 @@ class BotPlayer {
   constructor(
     readonly name: string,
     private readonly seed: number,
+    /** A player id (rated rooms) and the address it claims (local dev trusts CF-Connecting-IP). */
+    readonly who: { pid?: string; ip?: string } = {},
   ) {}
 
   connect(code: string) {
     const url = `${BASE!.replace(/^http/, 'ws')}/api/volley/rooms/${code}`;
     // Node's WebSocket (undici) takes headers; a browser sends Origin by itself.
-    this.ws = new WebSocket(url, { headers: { Origin: BASE! } } as unknown as string[]);
+    const headers = { Origin: BASE!, ...(this.who.ip ? { 'CF-Connecting-IP': this.who.ip } : {}) };
+    this.ws = new WebSocket(url, { headers } as unknown as string[]);
     this.ws.addEventListener('message', (e: MessageEvent) => this.onMessage(parseServerMessage(e.data)!));
     this.ws.addEventListener('open', () =>
-      this.send({ t: 'hello', v: PROTOCOL_VERSION, name: this.name, ...(this.token ? { token: this.token } : {}) }),
+      this.send({
+        t: 'hello',
+        v: PROTOCOL_VERSION,
+        name: this.name,
+        ...(this.token ? { token: this.token } : {}),
+        ...(this.who.pid ? { pid: this.who.pid } : {}),
+      }),
     );
     this.pingTimer = setInterval(
       () => this.send({ t: 'ping', c: performance.now(), rtt: Math.round(this.clock.rtt) }),
@@ -183,15 +194,29 @@ describe.skipIf(!BASE)('online volleyball against a running Worker', () => {
     const [codeA, codeB] = await Promise.all([first.matched, second.matched]);
     expect(codeA).toBe(codeB);
 
-    const a = new BotPlayer('Fila Um', 5);
-    const b = new BotPlayer('Fila Dois', 6);
+    // Fresh ids every run, so the ratings table of `wrangler dev` doesn't carry state between runs.
+    const pid = () =>
+      [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join('');
+    const a = new BotPlayer('Fila Um', 5, { pid: pid(), ip: '203.0.113.1' });
+    const b = new BotPlayer('Fila Dois', 6, { pid: pid(), ip: '203.0.113.2' });
     await a.connect(codeA);
     await b.connect(codeB);
+    expect(a.room!.rated).toBe(true); // rooms from the queue count for the ranking
     a.send({ t: 'ready', ready: true });
     b.send({ t: 'ready', ready: true });
     await a.until((m) => m.t === 'room' && m.room.phase === 'playing');
     await a.until((m) => m.t === 'state' && m.s.tick > 120);
     expect([a.errors, b.errors]).toEqual([[], []]);
+
+    // B gives up: a forfeit, saved to D1, and both ratings come back with the result.
+    b.send({ t: 'leave' });
+    await a.until((m) => m.t === 'room' && !!m.room.result?.ratings);
+    const [mine, theirs] = a.room!.result!.ratings!;
+    expect(mine.after).toBeGreaterThan(mine.before);
+    expect(theirs.after).toBeLessThan(theirs.before);
+    const me = await hashPlayer(a.who.pid!);
+    const board = (await (await fetch(`${BASE}/api/volley/ratings?me=${me}`)).json()) as OnlineRankingResponse;
+    expect(board.me).toMatchObject({ name: 'Fila Um', rating: mine.after, games: 1, wins: 1 });
     [a, b].forEach((p) => (p.stop(), p.ws.close()));
   });
 

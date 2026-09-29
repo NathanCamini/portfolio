@@ -1,4 +1,5 @@
-import { isRoomCode, newRoomCode } from '../src/lib/volley-online/protocol';
+import { isRoomCode, newRoomCode, type OnlineRankingResponse } from '../src/lib/volley-online/protocol';
+import { standing, topRatings } from './ratings';
 
 /**
  * HTTP side of the online volleyball (docs/volei-online.md, "API"):
@@ -6,6 +7,7 @@ import { isRoomCode, newRoomCode } from '../src/lib/volley-online/protocol';
  *   POST /api/volley/rooms        → 201 { code }   a new room (its Durable Object is initialised)
  *   GET  /api/volley/rooms/:code  → 101            WebSocket into that room's Durable Object
  *                                 → 200 { code, phase, players } / 404   without the upgrade (a pre-check)
+ *   GET  /api/volley/ratings      → 200 { top }    the online ranking (top 10 by rating)
  *   GET  /api/volley/queue        → 101            WebSocket into the quick-match queue
  *                                 → 204            without the upgrade (a pre-check: online is up, not rate-limited)
  *
@@ -20,7 +22,12 @@ export interface VolleyEnv {
   VOLLEY_QUEUE?: DurableObjectNamespace;
   ROOM_LIMIT?: RateLimit;
   QUEUE_LIMIT?: RateLimit;
+  /** The online ranking lives next to the mini-games' one (worker/ratings.ts). */
+  DB?: D1Database;
 }
+
+/** Rows on the online board. */
+const TOP = 10;
 
 type VolleyError = 'not_found' | 'forbidden' | 'rate_limited' | 'unavailable';
 
@@ -43,6 +50,15 @@ const fail = (error: VolleyError, status: number) => json({ error }, status);
 const secureRandom = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
 
 export async function handleVolley(request: Request, url: URL, env: VolleyEnv): Promise<Response> {
+  if (url.pathname === '/api/volley/ratings') {
+    if (request.method !== 'GET') return fail('not_found', 404);
+    if (!env.DB) return fail('unavailable', 503);
+    // `me` is the SHA-256 of the browser's player id (what the table stores), never the id itself.
+    const me = url.searchParams.get('me');
+    const body: OnlineRankingResponse = { top: await topRatings(env.DB, TOP) };
+    if (me && /^[0-9a-f]{64}$/.test(me)) body.me = await standing(env.DB, me);
+    return json(body, 200);
+  }
   if (url.pathname === '/api/volley/queue') {
     if (request.method !== 'GET') return fail('not_found', 404);
     return joinQueue(request, url, env);
@@ -70,14 +86,18 @@ async function createRoom(request: Request, url: URL, env: VolleyEnv): Promise<R
   return code ? json({ code }, 201) : fail('unavailable', 503);
 }
 
-/** Initialises a room under a fresh code (also used by the quick-match queue). Null if none could be opened. */
-export async function openRoom(rooms: DurableObjectNamespace): Promise<string | null> {
+/**
+ * Initialises a room under a fresh code. Rooms from the quick-match queue are
+ * `rated` (count for the online ranking); rooms made to share with a friend aren't.
+ * Null if none could be opened.
+ */
+export async function openRoom(rooms: DurableObjectNamespace, rated = false): Promise<string | null> {
   // 28.6 million codes: a collision with a live room is rare; retry a few times anyway.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = newRoomCode(secureRandom);
     const res = await rooms.get(rooms.idFromName(code)).fetch('https://volley-room/init', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, rated }),
     });
     if (res.status === 201) return code;
   }

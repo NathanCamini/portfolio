@@ -23,6 +23,7 @@ import type { Input, Side } from '../engine/types';
 import { KEYMAP, type GameKey } from '../useVolleyballGame';
 import { parseQueueServerMessage, type QueueClientMessage } from '@/lib/volley-online/queue';
 import { showRoomInUrl } from './link';
+import { playerId } from './player';
 
 /**
  * Browser side of the online match (docs/volei-online.md, "No navegador").
@@ -268,7 +269,13 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
         ws.onopen = () => {
           if (n.ws !== ws) return;
           const token = readToken(code);
-          const hello: ClientMessage = { t: 'hello', v: PROTOCOL_VERSION, name: n.name, ...(token ? { token } : {}) };
+          const hello: ClientMessage = {
+            t: 'hello',
+            v: PROTOCOL_VERSION,
+            name: n.name,
+            pid: playerId(),
+            ...(token ? { token } : {}),
+          };
           ws.send(JSON.stringify(hello));
         };
         ws.onmessage = (e) => {
@@ -368,7 +375,8 @@ export function useOnlineVolley({ canvasRef, stageRef, panelRef, strings, youLab
 
       const ws = new WebSocket(`${wsOrigin()}/api/volley/queue`);
       n.queue = ws;
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, name } satisfies QueueClientMessage));
+      ws.onopen = () =>
+        ws.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, name, pid: playerId() } satisfies QueueClientMessage));
       ws.onmessage = (e) => {
         const m = parseQueueServerMessage(e.data);
         if (!m || n.queue !== ws) return;

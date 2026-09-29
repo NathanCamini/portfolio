@@ -1,4 +1,5 @@
 import type { GameState, Input, Phase, Side } from '../../components/volleyball/engine/types';
+import type { RatingChange } from './elo';
 
 /**
  * Wire protocol of the online beach-volley match (docs/volei-online.md).
@@ -135,6 +136,8 @@ export interface SeatView {
   ready: boolean;
   /** Round trip the player reported, in ms (null until their first ping). */
   ping: number | null;
+  /** Online rating, in rated rooms (quick match) once the server has looked it up. */
+  rating: number | null;
 }
 
 export interface RoomView {
@@ -145,6 +148,8 @@ export interface RoomView {
   remainingMs: number | null;
   /** A match is under way: running, paused, or counting down to resume after a pause. */
   live: boolean;
+  /** Matches here count for the online ranking (rooms opened by the quick-match queue). */
+  rated: boolean;
   /** Matches won in this room, per side (rematches add up). */
   wins: [number, number];
   /** The last finished match. */
@@ -154,6 +159,10 @@ export interface RoomView {
     forfeit: boolean;
     /** Who played it (a player may have left the room since). */
     names: [string, string];
+    /** It counts for the ranking: a rated room with two different players (browser and address). */
+    counted: boolean;
+    /** Rating before/after, once the server has saved the result; null until then, and for friendlies. */
+    ratings: [RatingChange, RatingChange] | null;
   } | null;
 }
 
@@ -170,7 +179,7 @@ export type ErrorCode =
   | 'unavailable';
 
 export type ClientMessage =
-  | { t: 'hello'; v: number; name: string; token?: string }
+  | { t: 'hello'; v: number; name: string; token?: string; pid?: string }
   | { t: 'ready'; ready: boolean }
   | { t: 'input'; tick: number; bits: number }
   | { t: 'ping'; c: number; rtt?: number }
@@ -182,6 +191,9 @@ export type ServerMessage =
   | { t: 'state'; s: Snapshot }
   | { t: 'pong'; c: number }
   | { t: 'error'; code: ErrorCode };
+
+/** Tokens and player ids: 128 random bits as 32 lowercase hex characters. */
+export const isHex32 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{32}$/.test(v);
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
@@ -203,8 +215,15 @@ export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | n
   switch (o.t) {
     case 'hello':
       if (!isInt(o.v, 0, 1000) || typeof o.name !== 'string' || o.name.length > 64) return null;
-      if (o.token !== undefined && (typeof o.token !== 'string' || !/^[0-9a-f]{32}$/.test(o.token))) return null;
-      return { t: 'hello', v: o.v, name: o.name, ...(o.token ? { token: o.token as string } : {}) };
+      if (o.token !== undefined && !isHex32(o.token)) return null;
+      if (o.pid !== undefined && !isHex32(o.pid)) return null;
+      return {
+        t: 'hello',
+        v: o.v,
+        name: o.name,
+        ...(o.token ? { token: o.token as string } : {}),
+        ...(o.pid ? { pid: o.pid as string } : {}),
+      };
     case 'ready':
       return typeof o.ready === 'boolean' ? { t: 'ready', ready: o.ready } : null;
     case 'input':
@@ -230,4 +249,20 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------- online ranking (HTTP)
+
+/** A row of GET /api/volley/ratings: the top players by rating. */
+export interface OnlineRankingEntry {
+  name: string;
+  rating: number;
+  games: number;
+  wins: number;
+}
+
+export interface OnlineRankingResponse {
+  top: OnlineRankingEntry[];
+  /** With `?me=<sha-256 of the player id>`: that player's standing (null if never rated). */
+  me?: (OnlineRankingEntry & { position: number }) | null;
 }

@@ -8,6 +8,8 @@ import {
   type RoomHost,
   type TimerName,
 } from '../src/lib/volley-online/room';
+import { ratingOf, recordResult } from './ratings';
+import type { VolleyEnv } from './volley';
 
 /**
  * One online volleyball room = one Durable Object (docs/volei-online.md).
@@ -28,6 +30,8 @@ import {
 interface Attachment {
   id: string;
   side: Side | null;
+  /** The client's address (CF-Connecting-IP), so one person can't farm rating off two tabs. */
+  ip?: string;
 }
 
 const STORAGE_KEY = 'room';
@@ -68,10 +72,15 @@ export class VolleyRoom implements DurableObject {
     },
     // Storage writes are ordered and coalesced by the runtime; no need to await each one.
     persist: (state) => void this.ctx.storage.put(STORAGE_KEY, state),
+    // Without the database (previews) nothing is rated: lookups say "new player", results aren't saved.
+    rating: (pid) => (this.env.DB ? ratingOf(this.env.DB, pid) : Promise.resolve(null)),
+    record: (result) => (this.env.DB ? recordResult(this.env.DB, result, Date.now()) : Promise.resolve(null)),
   };
 
-  // (The runtime also passes the Worker's env; a room needs none of it.)
-  constructor(private readonly ctx: DurableObjectState) {
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly env: VolleyEnv,
+  ) {
     // Woken from hibernation (or first use): rebuild the lobby and reattach live sockets.
     void ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.get<PersistedRoom>(STORAGE_KEY);
@@ -92,8 +101,8 @@ export class VolleyRoom implements DurableObject {
     // Called by the Worker when it hands out a new code (worker/volley.ts).
     if (url.pathname === '/init' && request.method === 'POST') {
       if (this.core) return new Response(null, { status: 409 });
-      const { code } = await request.json<{ code: string }>();
-      const room = newRoom(code, Date.now());
+      const { code, rated } = await request.json<{ code: string; rated?: boolean }>();
+      const room = newRoom(code, Date.now(), rated === true);
       await this.ctx.storage.put(STORAGE_KEY, room);
       await this.ctx.storage.setAlarm(Date.now() + NET.ROOM_TTL_MS);
       this.core = new RoomCore(this.host, room);
@@ -114,7 +123,8 @@ export class VolleyRoom implements DurableObject {
 
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ id: crypto.randomUUID(), side: null } satisfies Attachment);
+    const ip = request.headers.get('CF-Connecting-IP') ?? undefined;
+    server.serializeAttachment({ id: crypto.randomUUID(), side: null, ip } satisfies Attachment);
     this.core.connect(this.connFor(server));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -157,6 +167,7 @@ export class VolleyRoom implements DurableObject {
     const attachment = (ws.deserializeAttachment() as Attachment | null) ?? { id: crypto.randomUUID(), side: null };
     const conn: Conn = {
       id: attachment.id,
+      ip: attachment.ip,
       send: (msg) => {
         try {
           ws.send(JSON.stringify(msg));

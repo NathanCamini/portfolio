@@ -102,6 +102,21 @@ export interface OnlineStrings {
   cancel: string;
   /** The quick-match lobby, until the opponent shows up. */
   found: string;
+  /** Online ranking (Elo): quick matches count, rooms with a friend don't. */
+  ranking: string;
+  rankingHelp: string;
+  rankingEmpty: string;
+  back: string;
+  /** `{n}` = position on the board. */
+  position: string;
+  /** `{wins}` of `{games}` matches won ("3/5 wins"). */
+  record: string;
+  rated: string;
+  friendly: string;
+  /** A rated room whose result didn't count (same browser or same network on both sides). */
+  notCounted: string;
+  /** `{after}` = new rating, `{delta}` = signed change ("+16"). */
+  ratingChange: string;
   or: string;
   codeLabel: string;
   join: string;

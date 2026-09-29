@@ -6,6 +6,8 @@ foi feito, por quê, e como testar, rodar e publicar.
 
 - **Fase 1:** salas por link (criar, mandar o link, jogar), reconexão, revanche.
 - **Fase 2:** [partida rápida](#partida-rápida), uma fila que junta dois desconhecidos numa sala nova.
+- **Fase 3:** [ranking online](#ranking-online) com Elo: a partida rápida vale pontos e a fila junta gente de nível
+  parecido.
 
 - [Como se joga](#como-se-joga)
 - [Arquitetura](#arquitetura)
@@ -14,6 +16,7 @@ foi feito, por quê, e como testar, rodar e publicar.
 - [Protocolo WebSocket](#protocolo-websocket)
 - [Ciclo de vida da sala](#ciclo-de-vida-da-sala)
 - [Partida rápida](#partida-rápida)
+- [Ranking online](#ranking-online)
 - [Servidor autoritativo](#servidor-autoritativo)
 - [Netcode no navegador](#netcode-no-navegador)
 - [Reconexão](#reconexão)
@@ -106,13 +109,14 @@ O modo contra a CPU continua idêntico, e os testes de dificuldade do motor segu
 
 ## API HTTP
 
-| Rota                          | Resposta                                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| `POST /api/volley/rooms`      | `201 { "code": "K7MPQ" }`: sala nova. `403` de outro site, `429` acima do limite, `503` sem DO.    |
-| `GET /api/volley/rooms/:code` | Com `Upgrade: websocket`: `101`, o WebSocket da sala. `Origin` precisa ser o próprio site (`403`). |
-| `GET /api/volley/rooms/:code` | Sem upgrade: `200 { code, phase, players }` ou `404`. A página checa isso antes de abrir o socket. |
-| `GET /api/volley/queue`       | Com `Upgrade: websocket`: `101`, o WebSocket da fila. `Origin` obrigatório (`403`).                |
-| `GET /api/volley/queue`       | Sem upgrade: `204`, ou `429` / `503`. O pré-teste da partida rápida.                               |
+| Rota                          | Resposta                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `POST /api/volley/rooms`      | `201 { "code": "K7MPQ" }`: sala nova. `403` de outro site, `429` acima do limite, `503` sem DO.          |
+| `GET /api/volley/rooms/:code` | Com `Upgrade: websocket`: `101`, o WebSocket da sala. `Origin` precisa ser o próprio site (`403`).       |
+| `GET /api/volley/rooms/:code` | Sem upgrade: `200 { code, phase, players }` ou `404`. A página checa isso antes de abrir o socket.       |
+| `GET /api/volley/queue`       | Com `Upgrade: websocket`: `101`, o WebSocket da fila. `Origin` obrigatório (`403`).                      |
+| `GET /api/volley/queue`       | Sem upgrade: `204`, ou `429` / `503`. O pré-teste da partida rápida.                                     |
+| `GET /api/volley/ratings`     | `200 { top, me? }`: o ranking online (top 10); `?me=<sha-256 do id>` inclui a sua posição. `503` sem D1. |
 
 O pré-teste por HTTP existe porque um WebSocket recusado não diz o motivo ao navegador. Com ele, a página mostra
 "sala não encontrada", "sala cheia" ou "online indisponível".
@@ -130,13 +134,13 @@ cliente antigo recebe `bad_version`, e a página pede para recarregar.
 
 **Cliente → servidor**
 
-| Mensagem                    | Quando                                                                      |
-| --------------------------- | --------------------------------------------------------------------------- |
-| `hello { v, name, token? }` | Primeira mensagem (até 5 s). `token` recupera a cadeira depois de cair.     |
-| `ready { ready }`           | Pronto / cancelar, no lobby e depois de uma partida (revanche).             |
-| `input { tick, bits }`      | Mudança de teclas, valendo a partir de `tick`. `bits`: 1 ← · 2 → · 4 pulo   |
-| `ping { c, rtt? }`          | A cada 2 s. `c` volta no `pong`, e `rtt` é o ping medido, mostrado a todos. |
-| `leave`                     | Sair da sala. No meio da partida, conta como W.O.                           |
+| Mensagem                          | Quando                                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `hello { v, name, token?, pid? }` | Primeira mensagem (até 5 s). `token` recupera a cadeira depois de cair; `pid` identifica o jogador no ranking. |
+| `ready { ready }`                 | Pronto / cancelar, no lobby e depois de uma partida (revanche).                                                |
+| `input { tick, bits }`            | Mudança de teclas, valendo a partir de `tick`. `bits`: 1 ← · 2 → · 4 pulo                                      |
+| `ping { c, rtt? }`                | A cada 2 s. `c` volta no `pong`, e `rtt` é o ping medido, mostrado a todos.                                    |
+| `leave`                           | Sair da sala. No meio da partida, conta como W.O.                                                              |
 
 **Servidor → cliente**
 
@@ -187,9 +191,12 @@ resultado. A partida em si fica só na memória (é refeita 120 vezes por segund
 - **Protocolo:** o navegador abre `GET /api/volley/queue` (WebSocket) e manda `join { v, name }`. O servidor responde
   `queued`, e depois `matched { code }`, fechando o socket em seguida; ou `error { code }` (`invalid_name`,
   `bad_version`, `bad_message`, `rate_limited`, `timeout`, `unavailable`).
-- **Pareamento:** por ordem de chegada. Quando há dois na fila, o objeto tira os dois **antes** de abrir a sala
-  (`openRoom`, a mesma função do `POST /rooms`), então um `join` que chega enquanto a sala abre não é pareado de
-  novo com eles. Se a sala não abrir, os dois recebem `unavailable`.
+- **Pareamento por nível** (fase 3): o mais antigo da fila escolhe, entre os outros, quem tem o rating mais
+  próximo do dele, desde que a diferença caiba na **janela**: ±150 na hora, e mais 10 pontos por segundo de espera
+  (±450 depois de 30 s; em uns 2 minutos, qualquer um). Se ninguém cabe, o próximo da fila tenta; quem sobra é
+  reavaliado a cada 2 s. O objeto tira os dois da fila **antes** de abrir a sala (`openRoom`, a mesma função do
+  `POST /rooms`, agora com `rated: true`), então um `join` que chega enquanto a sala abre não é pareado de novo com
+  eles. Se a sala não abrir, os dois recebem `unavailable`.
 - **Depois do pareamento é uma sala normal**, com tudo da fase 1 (reconexão, pausa, W.O., revanche). O navegador:
   - entra na sala e já manda `ready`, então a contagem começa assim que os dois chegam;
   - não mostra o link de compartilhar (é uma sala de desconhecidos) e troca o título por "Adversário encontrado!";
@@ -198,6 +205,33 @@ resultado. A partida em si fica só na memória (é refeita 120 vezes por segund
 - **Hibernação:** quem espera sozinho não custa nada. Cada socket guarda no _attachment_ se está na fila e desde
   quando; um objeto que acorda remonta a fila na mesma ordem.
 - **Cancelar** fecha o socket da fila, e a pessoa sai da fila na hora.
+
+## Ranking online
+
+Só a **partida rápida** vale ranking: numa sala com um amigo, os dois escolhem quem enfrentam, e seria fácil
+combinar resultados. O lobby diz qual é o caso ("Vale ranking" / "Amistosa: não vale ranking").
+
+- **Quem é quem:** cada navegador guarda um id aleatório de 128 bits (`localStorage`, `online/player.ts`) e o manda
+  no `hello` da sala e no `join` da fila (`pid`). O D1 guarda só o **SHA-256** do id: quem lê a tabela não consegue
+  jogar como ninguém. O rating é do navegador, qualquer que seja o apelido; o nome mostrado é o da última partida.
+- **Elo** (`src/lib/volley-online/elo.ts`): todo mundo começa com **1000**. Quem vence ganha K × (1 − chance que
+  tinha de vencer); quem perde, o equivalente. Ganhar de alguém 300 pontos acima vale ~27; de alguém 300 abaixo,
+  ~5. K é 48 nas 10 primeiras partidas (para achar o nível rápido) e 32 depois; o rating não cai abaixo de 100.
+  W.O. conta como derrota de quem saiu.
+- **O servidor grava**: quando a partida termina, a sala (Durable Object) lê os dois ratings, calcula e escreve as
+  duas linhas e um registro da partida numa transação do D1 (`worker/ratings.ts`, tabelas `online_ratings` e
+  `online_results`, migration `0004`). O resultado volta para os dois jogadores com antes/depois ("Rating: 1024 (+24)").
+- **Não vale ranking** (a sala dá "amistosa" sozinha): sala criada com link, os dois lados com o mesmo `pid` (duas
+  abas do mesmo navegador), os dois do **mesmo IP** (`CF-Connecting-IP`), ou um lado sem `pid`. Isso barra alguém
+  subindo o próprio rating contra si mesmo em duas abas.
+- **Placar:** `GET /api/volley/ratings` → top 10 por rating (empate: quem chegou primeiro). Com `?me=<sha-256 do
+id>` vem também a posição de quem pergunta — a página manda o hash, nunca o id. Na aba online, o botão
+  **Ranking online** mostra os dois.
+- **No lobby** o rating de cada um aparece ao lado do nome (a sala busca no D1 quando a pessoa entra).
+
+O que isso **não** impede: alguém com dois navegadores em duas redes diferentes jogando contra si mesmo. Para um
+portfólio, o custo (duas conexões, partidas reais de 7 pontos) já tira a graça; o próximo passo seria limitar
+quantas partidas por dia contam entre o mesmo par.
 
 ## Servidor autoritativo
 
@@ -364,13 +398,20 @@ npx vitest run src/lib/volley-online worker    # só o online
   - quem desiste sai da fila;
   - um `join` que chega enquanto a sala abre não é pareado duas vezes;
   - sala que não abre, apelido ruim, versão antiga, lixo, excesso de mensagens, socket mudo;
-  - hibernação (fila remontada dos sockets, na ordem).
+  - hibernação (fila remontada dos sockets, na ordem);
+  - ratings próximos primeiro, janela que abre com a espera, quem desiste durante a busca do rating.
+- `elo.test.ts`: chances, K de novato, ganho mínimo, piso, os dois lados.
+- `room.test.ts` (fase 3): rating no lobby, resultado gravado com a variação dos dois, e os casos que não valem
+  (sala amistosa, mesmo navegador, mesmo IP, sem id); sala continua ranqueada depois de hibernar.
+- `worker/test/ratings.test.ts`: o SQL de verdade (SQLite do Node): começa sem rating, grava os dois lados,
+  acumula, guarda só o hash, `GET /api/volley/ratings` com e sem `?me`.
 - `worker/test/volley.test.ts`: as rotas (criação, colisão de código, `403`/`429`/`503`, encaminhamento do upgrade,
   pré-teste), da sala e da fila.
 - `link.test.ts`: o link da sala e a leitura do `#volei-CÓDIGO`.
 - `worker/test/online.e2e.test.ts`: **partida real** contra o `wrangler dev`, com o Durable Object de verdade e
   WebSockets de verdade. Dois bots usam o mesmo `Predictor` e o mesmo `TickClock` do navegador, jogam até 7, um
-  deles cai e volta no meio; outros dois se encontram pela partida rápida e jogam; um terceiro jogador é recusado e
+  deles cai e volta no meio; outros dois se encontram pela partida rápida, jogam, um desiste e o ranking do D1
+  registra a vitória e a derrota; um terceiro jogador é recusado e
   uma sala inexistente não abre. Leva ~2 minutos
   e só roda quando pedido:
 
@@ -421,6 +462,9 @@ Nada manual. O `wrangler.jsonc` já declara:
   vez, e os seguintes não fazem nada;
 - os rate limits `ROOM_LIMIT` (namespace `1003`) e `QUEUE_LIMIT` (namespace `1004`).
 
+O ranking online usa o mesmo banco D1 do ranking dos mini-jogos: as tabelas novas (`0004_online_ratings.sql`) são
+criadas pelo próprio Worker na primeira vez que precisar, como as outras. Previews não têm banco: tudo vira amistoso.
+
 Regras para o futuro: **nunca edite nem remova uma migration já publicada**. Renomear ou apagar a classe exige uma
 migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo incompatíveis sobem
 `PROTOCOL_VERSION`; abas abertas com o site antigo recebem `bad_version` e pedem para recarregar.
@@ -435,14 +479,15 @@ migration nova (`renamed_classes` / `deleted_classes`). Mudanças de protocolo i
 - **Navegadores diferentes.** A física usa ponto flutuante; motores JavaScript diferentes podem divergir na última
   casa decimal em funções como `Math.hypot` e `Math.sin`. Isso não afeta o resultado (o servidor decide), no máximo gera uma
   correção mínima, que o arredondamento dos snapshots absorve.
-- **Fila única, sem nível:** a partida rápida junta quem chegar primeiro, sem olhar habilidade nem região. O
-  pareamento por ELO vem com o ranking (fase 3).
+- **Fila única, sem região:** a fila olha o rating, não a distância. Com pouca gente, a janela abre e junta
+  quem estiver lá, perto ou longe.
+- **Corrida rara no rating:** ler e gravar o rating são duas idas ao D1. Se o mesmo jogador terminar duas partidas
+  rápidas no mesmo instante (duas abas, duas salas), uma atualização pode se perder.
 - **Sem espectadores:** ver as próximas fases.
 
 ## Próximas fases
 
 2. ~~**Partida rápida**~~: feita (ver [Partida rápida](#partida-rápida)).
-3. **Ranking online (ELO):** resultado gravado pelo servidor no D1 (o placar já é autoritativo, não precisa das
-   defesas contra trapaça do ranking local), com a revanche já pronta desta fase.
+3. ~~**Ranking online (Elo)**~~: feito (ver [Ranking online](#ranking-online)).
 4. **Acabamento:** emotes rápidos, espectadores (um terceiro socket só de leitura) e indicador de conexão mais rico.
    O ping de cada jogador já aparece no lobby e durante a partida.

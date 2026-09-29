@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { gameConfig } from '../../config/game';
 import { NET, PROTOCOL_VERSION, type ErrorCode, type RoomView, type ServerMessage, type Snapshot } from './protocol';
-import { newRoom, RoomCore, type Conn, type PersistedRoom, type RoomHost, type TimerName } from './room';
+import { ELO, rate, type Rated } from './elo';
+import {
+  newRoom,
+  RoomCore,
+  type Conn,
+  type PersistedRoom,
+  type RatedResult,
+  type RoomHost,
+  type TimerName,
+} from './room';
 import { seeded, sideBot } from './testing';
 
 /** A fake runtime: manual clock, named timers, a loop the test drives, and storage. */
@@ -21,6 +30,17 @@ class FakeHost implements RoomHost {
   };
   setLoop = (running: boolean) => void (this.looping = running);
   persist = (state: PersistedRoom) => void (this.saved = structuredClone(state));
+  /** A fake ratings table: pid → { rating, games }. */
+  ratings = new Map<string, { rating: number; games: number }>();
+  recorded: RatedResult[] = [];
+  rating = async (pid: string) => this.ratings.get(pid)?.rating ?? null;
+  record = async (r: RatedResult) => {
+    this.recorded.push(r);
+    const players = r.pids.map((p) => this.ratings.get(p) ?? { rating: ELO.START, games: 0 }) as [Rated, Rated];
+    const changes = rate(players, r.winner);
+    r.pids.forEach((p, i) => this.ratings.set(p, { rating: changes[i].after, games: players[i].games + 1 }));
+    return changes;
+  };
 
   /** Moves the clock, firing due timers and running the loop at ~60 Hz like the Durable Object. */
   advance(ms: number) {
@@ -41,6 +61,7 @@ class FakeHost implements RoomHost {
 class FakeConn implements Conn {
   static next = 0;
   readonly id = `c${FakeConn.next++}`;
+  constructor(readonly ip?: string) {}
   inbox: ServerMessage[] = [];
   closed: { code: number; reason: string } | null = null;
   side: 0 | 1 | null = null;
@@ -64,10 +85,16 @@ function setup(saved: PersistedRoom = newRoom('ABC23', 1_000_000)) {
   const room = new RoomCore(host, saved);
   host.room = room;
   const say = (conn: Conn, msg: object) => room.message(conn, JSON.stringify(msg));
-  const join = (name: string, token?: string) => {
-    const conn = new FakeConn();
+  const join = (name: string, token?: string, who: { pid?: string; ip?: string } = {}) => {
+    const conn = new FakeConn(who.ip);
     room.connect(conn);
-    say(conn, { t: 'hello', v: PROTOCOL_VERSION, name, ...(token ? { token } : {}) });
+    say(conn, {
+      t: 'hello',
+      v: PROTOCOL_VERSION,
+      name,
+      ...(token ? { token } : {}),
+      ...(who.pid ? { pid: who.pid } : {}),
+    });
     return conn;
   };
   /** Both players ready and the countdown elapsed: a match is running. */
@@ -305,3 +332,55 @@ function stateOf(s: Snapshot) {
     ballSide: 0,
   } as unknown as Parameters<ReturnType<typeof sideBot>>[0];
 }
+
+describe('rated rooms (quick match)', () => {
+  const PA = 'a'.repeat(32);
+  const PB = 'b'.repeat(32);
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('shows each player’s rating, and saves the result of a match with the change for both', async () => {
+    const { join, start, say, host } = setup(newRoom('ABC23', 1_000_000, true));
+    host.ratings.set(PA, { rating: 1100, games: 20 });
+    const a = join('Nathan', undefined, { pid: PA, ip: '1.1.1.1' });
+    const b = join('Maria', undefined, { pid: PB, ip: '2.2.2.2' });
+    await flush();
+    expect(a.room.rated).toBe(true);
+    expect(a.room.seats.map((s) => s?.rating)).toEqual([1100, ELO.START]); // a newcomer shows the starting rating
+    start(a, b);
+    say(b, { t: 'leave' }); // a forfeit counts like any loss
+    await flush();
+    expect(host.recorded).toEqual([{ pids: [PA, PB], names: ['Nathan', 'Maria'], winner: 0 }]);
+    const { ratings } = a.room.result!;
+    expect(ratings![0].after).toBeGreaterThan(1100);
+    expect(ratings![1].after).toBeLessThan(ELO.START);
+    expect(a.room.seats[0]?.rating).toBe(ratings![0].after);
+  });
+
+  it('never rates a friendly room, the same browser twice, the same address twice, or a player without an id', async () => {
+    const cases: [PersistedRoom, { pid?: string; ip?: string }, { pid?: string; ip?: string }][] = [
+      [newRoom('ABC23', 0, false), { pid: PA }, { pid: PB }],
+      [newRoom('ABC23', 0, true), { pid: PA }, { pid: PA }],
+      [newRoom('ABC23', 0, true), { pid: PA, ip: '1.1.1.1' }, { pid: PB, ip: '1.1.1.1' }],
+      [newRoom('ABC23', 0, true), { pid: PA }, {}],
+    ];
+    for (const [saved, wa, wb] of cases) {
+      const { join, start, say, host } = setup(saved);
+      const a = join('Nathan', undefined, wa);
+      const b = join('Maria', undefined, wb);
+      start(a, b);
+      say(b, { t: 'leave' });
+      await flush();
+      expect(host.recorded).toEqual([]);
+      expect(a.room.result).toMatchObject({ counted: false, ratings: null });
+    }
+  });
+
+  it('keeps the room rated and the players identified across hibernation', () => {
+    const { join, host } = setup(newRoom('ABC23', 1_000_000, true));
+    join('Nathan', undefined, { pid: PA, ip: '1.1.1.1' });
+    const saved = host.saved!;
+    expect(saved.rated).toBe(true);
+    expect(saved.seats[0]).toMatchObject({ pid: PA, ip: '1.1.1.1' });
+    expect(new RoomCore(new FakeHost(), saved).rated).toBe(true);
+  });
+});

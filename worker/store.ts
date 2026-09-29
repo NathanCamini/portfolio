@@ -2,9 +2,10 @@ import type { GameId, LeaderboardEntry, SubmitResponse } from '../src/lib/rankin
 import volleyRanking from '../migrations/0001_volley_ranking.sql';
 import volleyEndless from '../migrations/0002_volley_endless.sql';
 import ranking from '../migrations/0003_ranking.sql';
+import onlineRatings from '../migrations/0004_online_ratings.sql';
 
 /** Every migration's statements, in order (none has `;` or `--` inside string literals). */
-const SCHEMA = [volleyRanking, volleyEndless, ranking]
+const SCHEMA = [volleyRanking, volleyEndless, ranking, onlineRatings]
   .join(';')
   .replace(/--[^\n]*/g, '')
   .split(';')
@@ -16,7 +17,7 @@ const SCHEMA = [volleyRanking, volleyEndless, ranking]
  * migration nobody applied) creates what's missing from the migration files
  * — they're idempotent — and retries once. Costs nothing once the schema is there.
  */
-async function withSchema<T>(db: D1Database, query: () => Promise<T>): Promise<T> {
+export async function withSchema<T>(db: D1Database, query: () => Promise<T>): Promise<T> {
   try {
     return await query();
   } catch (err) {
