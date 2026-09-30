@@ -94,11 +94,9 @@ separado, com Worker, D1 e Durable Objects próprios:
 [NathanCamini/volleyball_game](https://github.com/NathanCamini/volleyball_game).
 
 - **Links para lá:** o botão "Jogar online 1×1" da seção, o da barra do painel e um cartão depois da partida contra
-  o chefe. O endereço vem da variável de build **`NEXT_PUBLIC_GAME_URL`** (Worker → Settings → Build → Variables);
-  sem ela, os links levam ao repositório.
-- **Quem já jogava online aqui:** o id do navegador (do qual o rating Elo depende) e o apelido ficaram no
-  `localStorage` deste site. No clique, o link leva os dois no fragmento da URL (`#import=…`, que não vai a servidor
-  nenhum) e o jogo os guarda por lá (`src/lib/game-link.ts`).
+  o chefe. O endereço vem da variável de build **`NEXT_PUBLIC_GAME_URL`** (Worker → Settings → Build → Variables),
+  a raiz do jogo (`https://volleyball-game.….workers.dev`); o idioma é acrescentado pelo site, e um `/pt` ou `/en`
+  no fim da variável é ignorado. Sem ela, os links levam ao repositório. O link é limpo: não leva dados do navegador.
 - **Links antigos de sala** (`/#volei-CÓDIGO`) redirecionam para a mesma sala no jogo.
 - **Durable Objects:** a migration `v3-volley-moved-out` do `wrangler.jsonc` apaga as classes `VolleyRoom` e
   `VolleyQueue` deste Worker no próximo deploy (elas só guardavam salas em andamento; os ratings estão no D1).
