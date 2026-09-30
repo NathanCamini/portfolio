@@ -1,5 +1,5 @@
 import { site } from '@/config/site';
-import type { Locale } from '@/i18n/config';
+import { locales, type Locale } from '@/i18n/config';
 
 /**
  * Links to the full volleyball game (online 1×1, Endless, rankings), which
@@ -16,32 +16,25 @@ export function roomFromHash(hash: string): string | null {
   return m ? m[1].toUpperCase() : null;
 }
 
+const TRAILING_LOCALE = new RegExp(`/(${locales.join('|')})$`);
+
 /**
- * Someone who played online here: their browser id (the one their Elo rating
- * hangs on) and nickname stayed in this origin's localStorage. The link
- * carries them in the fragment (never sent to a server), and the game keeps
- * them if that browser has nothing there yet.
+ * The game's root from NEXT_PUBLIC_GAME_URL, however it was typed: without a
+ * trailing slash, query or fragment, or a language path (`…/pt` would
+ * otherwise become `…/pt/pt`, a page that doesn't exist).
  */
-function handoff(): string {
-  try {
-    const pid = localStorage.getItem('volley-player');
-    if (!pid || !/^[0-9a-f]{32}$/.test(pid)) return '';
-    const name = localStorage.getItem('ranking-name') ?? '';
-    return `#import=${pid}${name ? `.${encodeURIComponent(name)}` : ''}`;
-  } catch {
-    return '';
-  }
+export function gameRoot(url: string): string {
+  return url
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
+    .replace(TRAILING_LOCALE, '')
+    .replace(/\/+$/, '');
 }
 
 /** The game in the visitor's language; `room` opens an old room link there. Pure: safe to render. */
 export function gameLink(locale: Locale, room?: string | null): string {
   if (!site.gameUrl) return site.gameRepo;
-  const base = `${site.gameUrl.replace(/\/$/, '')}/${locale}`;
+  const base = `${gameRoot(site.gameUrl)}/${locale}`;
   return room ? `${base}#volei-${room}` : base;
-}
-
-/** The same link with this browser's online identity attached (read at click time, in the browser). */
-export function gameLinkWithHandoff(locale: Locale): string {
-  const link = gameLink(locale);
-  return site.gameUrl ? `${link}${handoff()}` : link;
 }
