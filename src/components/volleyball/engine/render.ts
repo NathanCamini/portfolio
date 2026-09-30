@@ -133,21 +133,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
   ctx.arc(820, 92, S.moonR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Sea (or lava) with drifting wave dashes.
-  ctx.fillStyle = S.sea;
-  ctx.fillRect(0, 392, W, 42);
-  ctx.strokeStyle = S.wave;
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 6; i++) {
-    const y = 400 + i * 6;
-    const off = (g.clock * (0.6 + i * 0.2)) % 120;
-    ctx.beginPath();
-    for (let x = -120 + off; x < W; x += 120) {
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 40, y);
-    }
-    ctx.stroke();
-  }
+  drawSea(ctx, S, g.clock / 60);
 
   // Sand (or scorched rock).
   ctx.fillStyle = S.ground;
@@ -259,6 +245,77 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: GameState, view: Vi
     const theirs = bug ? T.pBoss : T.pCpu;
     ctx.fillText(g.lastScorer === 0 ? T.pYou : theirs, W / 2, 200);
   }
+}
+
+const SEA_TOP = 392;
+const SHORE = 432;
+const MOON_X = 820;
+
+/** A repeatable 0..1 number per wave crest, so each one bobs and fades on its own rhythm. */
+const hash = (i: number, row: number) => {
+  const v = Math.sin(i * 12.9898 + row * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+/**
+ * The sea (or the lava lake) behind the court, at night: a calm surface, not
+ * a current. Nothing slides sideways. Wave crests sit at fixed spots, bob a
+ * few pixels and fade in and out, each on its own slow rhythm; rows further
+ * away are thinner and closer together; the moon lays a shimmering path on
+ * the water; and every few seconds a line of foam washes up on the sand.
+ * `t` is in seconds.
+ */
+function drawSea(ctx: CanvasRenderingContext2D, S: Scene, t: number) {
+  const { W } = FIELD;
+  ctx.fillStyle = S.sea;
+  ctx.fillRect(0, SEA_TOP, W, SHORE - SEA_TOP);
+  ctx.save();
+  ctx.lineCap = 'round';
+
+  // Wave crests, far (top) to near (bottom).
+  ctx.strokeStyle = S.wave;
+  for (let row = 0; row < 4; row++) {
+    const y = SEA_TOP + 5 + row * (4 + row * 2);
+    const gap = 64 + row * 26;
+    const len = 10 + row * 9;
+    ctx.lineWidth = 1 + row * 0.5;
+    for (let i = 0; i * gap < W + gap; i++) {
+      const h = hash(i, row);
+      const x = i * gap + h * gap * 0.6 - gap / 2 + Math.sin(t * 0.8 + h * 6.3) * (2 + row);
+      ctx.globalAlpha = 0.18 + 0.42 * (0.5 + 0.5 * Math.sin(t * (0.5 + h * 0.4) + h * 9));
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + len, y);
+      ctx.stroke();
+    }
+  }
+
+  // The moon's reflection: short strokes under it that breathe in and out.
+  ctx.strokeStyle = S.moon;
+  ctx.lineWidth = 1.5;
+  for (let y = SEA_TOP + 3; y < SHORE - 4; y += 4) {
+    const depth = (y - SEA_TOP) / (SHORE - SEA_TOP);
+    const half = (5 + depth * 16) * (0.55 + 0.45 * Math.sin(t * 1.3 + y * 0.9));
+    ctx.globalAlpha = 0.28 - depth * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(MOON_X - half, y);
+    ctx.lineTo(MOON_X + half, y);
+    ctx.stroke();
+  }
+
+  // Foam washing up on the sand: comes in slowly, then fades (a wave every ~5 s).
+  const swell = 0.5 + 0.5 * Math.sin((t * Math.PI * 2) / 5);
+  ctx.strokeStyle = S.moon;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.12 + 0.3 * swell;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 12) {
+    const y = SHORE - 1 - swell * 3 + Math.sin(x / 37 + t * 0.7) * 1.2;
+    if (x === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
