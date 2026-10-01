@@ -236,6 +236,8 @@ export interface Dictionary {
   contact: {
     label: string;
     title: string;
+    /** Words of the title set in the accent colour (like the hero's rotating phrase). */
+    titleAccents: string[];
   };
   /** The interactive terminal opened from the hero (and with the ' / ~ keys). */
   terminal: {

@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { HandWrite } from '@/components/fun/HandWrite';
 import { Magnetic } from '@/components/fun/Magnetic';
 import { Reveal } from '@/components/motion/Reveal';
 import { EASE_OUT_SOFT } from '@/components/motion/easing';
@@ -20,7 +21,7 @@ export function Contact() {
       <section id="contato" className={`section ${styles.section}`}>
         <Reveal className="eyebrow path">{t.contact.label}</Reveal>
         <Reveal as="h2" delay={80} className={styles.title}>
-          {t.contact.title}
+          <HandWrite text={t.contact.title} accents={t.contact.titleAccents} delay={0.25} speed={0.072} />
         </Reveal>
         <Reveal delay={160} className={styles.links}>
           <Magnetic>

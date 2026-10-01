@@ -1,0 +1,30 @@
+.word {
+  position: relative;
+  display: inline-block;
+  white-space: pre;
+}
+
+.ink {
+  display: inline-block;
+}
+
+/* The pen nib: a glowing dot with a short ink trail, riding the edge of the written text. */
+.pen {
+  position: absolute;
+  top: 62%;
+  width: 0.09em;
+  height: 0.09em;
+  margin: -0.045em 0 0 -0.045em;
+  border-radius: 50%;
+  background: var(--color-accent-200);
+  box-shadow:
+    0 0 0.18em 0.05em color-mix(in srgb, var(--color-accent) 75%, transparent),
+    -0.14em 0.02em 0.1em 0 color-mix(in srgb, var(--color-accent) 45%, transparent);
+  pointer-events: none;
+}
+
+/* Highlighted words: same colour and glow as the hero's rotating phrase. */
+.accent {
+  color: var(--color-accent-300);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}

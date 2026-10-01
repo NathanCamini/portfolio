@@ -317,6 +317,7 @@ export const pt: Dictionary = {
   contact: {
     label: 'Contato',
     title: 'Tem um sistema para escalar ou um bug estranho o suficiente? Vamos conversar.',
+    titleAccents: ['escalar', 'bug', 'Vamos', 'conversar'],
   },
   terminal: {
     title: 'visitante@nathan: ~',
