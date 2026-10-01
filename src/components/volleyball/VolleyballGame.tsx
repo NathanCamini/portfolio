@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CornersIn, CornersOut, Close } from '@/components/ui/icons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useI18n } from '@/i18n/I18nProvider';
+import { setMusicActive } from '@/lib/audio/engine';
 import { celebrate, originOf } from '@/lib/confetti';
 import type { StageId } from './engine/stages';
 import { PlayOnline } from './PlayOnline';
 import { saveCampaignStage, savedCampaignStage } from './progress';
+import { SoundControl } from './SoundControl';
 import { TouchPad } from './TouchPad';
 import { useVolleyballGame, type MatchEnd } from './useVolleyballGame';
 import styles from './VolleyballGame.module.css';
@@ -37,6 +39,11 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
   );
   // Campaign progress comes back on the next visit (see progress.ts).
   const [stage, setStage] = useState<StageId>(savedCampaignStage);
+  // The music plays while this panel is open (lib/audio/engine.ts).
+  useEffect(() => {
+    setMusicActive(true);
+    return () => setMusicActive(false);
+  }, []);
   /** The boss match is over (won or lost): time to mention the full game. */
   const [more, setMore] = useState(false);
 
@@ -87,6 +94,7 @@ export function VolleyballGame({ id, onClose }: { id: string; onClose: () => voi
         <span className={styles.controls}>{vb.controls}</span>
         <div className={styles.actions}>
           <PlayOnline className={`btn btn-secondary ${styles.toolBtn}`}>{vb.online}</PlayOnline>
+          <SoundControl />
           {canFullscreen && (
             <button type="button" className={`btn btn-secondary ${styles.toolBtn}`} onClick={toggleFullscreen}>
               {fullscreen ? <CornersIn size={14} /> : <CornersOut size={14} />}

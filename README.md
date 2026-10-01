@@ -97,6 +97,10 @@ separado, com Worker, D1 e Durable Objects próprios:
   o chefe. O endereço vem da variável de build **`NEXT_PUBLIC_GAME_URL`** (Worker → Settings → Build → Variables),
   a raiz do jogo (`https://volleyball-game.….workers.dev`); o idioma é acrescentado pelo site, e um `/pt` ou `/en`
   no fim da variável é ignorado. Sem ela, os links levam ao repositório. O link é limpo: não leva dados do navegador.
+- **Som:** a campanha tem os mesmos sons do jogo completo, sintetizados com Web Audio (`src/lib/audio`):
+  - efeitos calmos e equalizados (pulo, toque, rede, pontos, vitória e derrota) e uma música lo-fi de fundo;
+  - a música toca só enquanto o painel do jogo está aberto;
+  - o botão 🔊 na barra do painel ajusta efeitos e música separadamente, salvos no navegador.
 - **Links antigos de sala** (`/#volei-CÓDIGO`) redirecionam para a mesma sala no jogo.
 - **Durable Objects:** a migration `v3-volley-moved-out` do `wrangler.jsonc` apaga as classes `VolleyRoom` e
   `VolleyQueue` deste Worker no próximo deploy (elas só guardavam salas em andamento; os ratings estão no D1).
