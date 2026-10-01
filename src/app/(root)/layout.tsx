@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { site } from '@/config/site';
 import { systemLocaleRedirectScript } from '@/i18n/detect';
-import { caveat, inter } from '../fonts';
+import { hand, inter } from '../fonts';
 import '../globals.css';
 
 /**
@@ -23,7 +23,7 @@ export const viewport: Viewport = { themeColor: '#161826', colorScheme: 'dark' }
 
 export default function LanguageRedirectLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${caveat.variable}`}>
+    <html lang="pt-BR" className={`${inter.variable} ${hand.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: systemLocaleRedirectScript }} />
       </head>
