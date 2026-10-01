@@ -21,7 +21,7 @@ export function Contact() {
       <section id="contato" className={`section ${styles.section}`}>
         <Reveal className="eyebrow path">{t.contact.label}</Reveal>
         <Reveal as="h2" delay={80} className={styles.title}>
-          <HandWrite text={t.contact.title} delay={0.25} speed={0.05} />
+          <HandWrite text={t.contact.title} accents={t.contact.titleAccents} delay={0.25} speed={0.09} />
         </Reveal>
         <Reveal delay={160} className={styles.links}>
           <Magnetic>

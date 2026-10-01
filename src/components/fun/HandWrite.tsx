@@ -60,12 +60,15 @@ export function HandWrite({
   text,
   delay = 0,
   speed = WRITE_SPEED,
+  accents = [],
   className,
 }: {
   text: string;
   delay?: number;
   /** Seconds per character. */
   speed?: number;
+  /** Words (punctuation ignored) set in the accent colour. */
+  accents?: string[];
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -87,7 +90,15 @@ export function HandWrite({
           return (
             <span key={i}>
               <span className={styles.word}>
-                <motion.span className={styles.ink} variants={ink} custom={timing} initial={initial} animate={animate}>
+                <motion.span
+                  className={
+                    accents.includes(w.replace(/[^\p{L}\p{N}’']/gu, '')) ? `${styles.ink} ${styles.accent}` : styles.ink
+                  }
+                  variants={ink}
+                  custom={timing}
+                  initial={initial}
+                  animate={animate}
+                >
                   {w}
                 </motion.span>
                 {reduce ? null : (
