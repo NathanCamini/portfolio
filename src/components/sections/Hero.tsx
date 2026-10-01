@@ -11,7 +11,6 @@ import {
   type MotionValue,
 } from 'motion/react';
 import { Magnetic } from '@/components/fun/Magnetic';
-import { HandWrite, writeDuration } from '@/components/fun/HandWrite';
 import { RotatingText } from '@/components/fun/RotatingText';
 import { Reveal } from '@/components/motion/Reveal';
 import { ArrowDown, ArrowRight } from '@/components/ui/icons';
@@ -19,9 +18,6 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { DELETE_QUERY, executeQuery } from '@/lib/incident';
 import { openTerminal } from '@/lib/terminal';
 import styles from './Hero.module.css';
-
-/** Seconds before the headline starts writing itself. */
-const TITLE_DELAY = 0.5;
 
 type Tone = 'danger' | 'warn' | 'ok';
 
@@ -195,12 +191,7 @@ export function Hero() {
 
       <motion.div className={styles.inner} style={{ y: parallaxY, opacity: fade, scale, filter: blur }}>
         <Reveal as="h1" delay={120} className={styles.title}>
-          <HandWrite text={t.hero.titleLead} delay={TITLE_DELAY} />{' '}
-          <RotatingText
-            key={locale}
-            words={t.hero.titleWords}
-            startDelay={TITLE_DELAY + writeDuration(t.hero.titleLead) + 0.1}
-          />
+          {t.hero.titleLead} <RotatingText key={locale} words={t.hero.titleWords} />
         </Reveal>
 
         <Reveal as="p" delay={260} className={styles.sub}>

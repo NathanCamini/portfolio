@@ -1,5 +1,6 @@
 .slot {
   display: grid;
+  perspective: 600px;
 }
 
 /* Every child sits in the same cell; the tallest (a ghost) sets the height. */
@@ -14,5 +15,15 @@
 .word {
   display: block;
   color: var(--color-accent-300);
-  text-shadow: 0 0 28px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.chunk {
+  display: inline-block;
+  white-space: pre;
+}
+
+.char {
+  display: inline-block;
+  transform-origin: 50% 80%;
 }

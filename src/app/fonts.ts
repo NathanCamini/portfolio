@@ -1,4 +1,4 @@
-import { Inter, Marck_Script } from 'next/font/google';
+import { Caveat, Inter } from 'next/font/google';
 
 /** Inter, self-hosted at build time (no request to Google at runtime). Shared by both root layouts. */
 export const inter = Inter({
@@ -8,10 +8,10 @@ export const inter = Inter({
   display: 'swap',
 });
 
-/** Connected pen cursive for the hero headline (see components/fun/HandWrite). */
-export const hand = Marck_Script({
+/** Handwriting face for text that writes itself (see components/fun/HandWrite). */
+export const hand = Caveat({
   subsets: ['latin', 'latin-ext'],
-  weight: '400',
+  weight: '700',
   variable: '--font-hand',
   display: 'swap',
 });

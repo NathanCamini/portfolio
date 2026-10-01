@@ -47,14 +47,11 @@
 
 .title {
   margin: 0;
-  max-width: 15ch;
-  /* Handwritten cursive: set bigger than Inter, with no tracking so the letters stay joined. */
-  font-family: var(--font-hand), 'Segoe Script', 'Bradley Hand', cursive;
-  font-weight: 400;
-  font-size: clamp(50px, 8.4vw, 116px);
-  line-height: 1.02;
-  letter-spacing: 0;
-  word-spacing: -0.12em;
+  max-width: 17ch;
+  font-weight: 500;
+  font-size: clamp(40px, 7vw, 92px);
+  line-height: 1;
+  letter-spacing: -0.035em;
   text-wrap: balance;
 }
 

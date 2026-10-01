@@ -1,6 +1,7 @@
 'use client';
 
-import { motion, useReducedMotion, type Variants } from 'motion/react';
+import { useRef } from 'react';
+import { motion, useInView, useReducedMotion, type Variants } from 'motion/react';
 import styles from './HandWrite.module.css';
 
 /** Seconds the "pen" spends per character. */
@@ -10,8 +11,8 @@ export const WRITE_SPEED = 0.075;
 const WORD_GAP = 0.09;
 
 /** Time (s) `text` takes to be written, pauses between words included. */
-export function writeDuration(text: string) {
-  return text.split(' ').reduce((t, w) => t + w.length * WRITE_SPEED + WORD_GAP, 0);
+export function writeDuration(text: string, speed = WRITE_SPEED) {
+  return text.split(' ').reduce((t, w) => t + w.length * speed + WORD_GAP, 0);
 }
 
 // The negative insets leave room for cursive overhangs and descenders; once written the clip is
@@ -51,30 +52,52 @@ const pen: Variants = {
 };
 
 /**
- * Writes `text` out by hand: each word is uncovered left to right, one after the other, with a
+ * Writes `text` out by hand, once it scrolls into view: each word is uncovered left to right, one after the other, with a
  * pen nib riding the edge of the ink. Screen readers get the plain text; with reduced motion
  * it just shows.
  */
-export function HandWrite({ text, delay = 0, className }: { text: string; delay?: number; className?: string }) {
+export function HandWrite({
+  text,
+  delay = 0,
+  speed = WRITE_SPEED,
+  className,
+}: {
+  text: string;
+  delay?: number;
+  /** Seconds per character. */
+  speed?: number;
+  className?: string;
+}) {
   const reduce = useReducedMotion();
   const words = text.split(' ');
+  // Starts writing when the text scrolls into view, once. Watched on the container: the words
+  // themselves are fully clipped at first, and a clipped element never counts as visible.
+  const ref = useRef<HTMLSpanElement>(null);
+  const seen = useInView(ref, { once: true, amount: 0.6 });
+  const animate = reduce || seen ? 'shown' : 'hidden';
   // Start time of each word: the previous ones' writing time plus the pauses.
-  const starts = words.map((_, i) => delay + (i ? writeDuration(words.slice(0, i).join(' ')) : 0));
+  const starts = words.map((_, i) => delay + (i ? writeDuration(words.slice(0, i).join(' '), speed) : 0));
   return (
-    <span className={className}>
+    <span ref={ref} className={className}>
       <span className="sr-only">{text}</span>
       <span aria-hidden="true">
         {words.map((w, i, arr) => {
-          const timing: Timing = { delay: starts[i], duration: w.length * WRITE_SPEED };
+          const timing: Timing = { delay: starts[i], duration: w.length * speed };
           const initial = reduce ? 'shown' : 'hidden';
           return (
             <span key={i}>
               <span className={styles.word}>
-                <motion.span className={styles.ink} variants={ink} custom={timing} initial={initial} animate="shown">
+                <motion.span className={styles.ink} variants={ink} custom={timing} initial={initial} animate={animate}>
                   {w}
                 </motion.span>
                 {reduce ? null : (
-                  <motion.span className={styles.pen} variants={pen} custom={timing} initial="hidden" animate="shown" />
+                  <motion.span
+                    className={styles.pen}
+                    variants={pen}
+                    custom={timing}
+                    initial="hidden"
+                    animate={animate}
+                  />
                 )}
               </span>
               {i < arr.length - 1 ? ' ' : null}
