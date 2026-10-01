@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { GameStrings } from '@/i18n/types';
+import { sfx } from '@/lib/audio/engine';
 import { readPalette } from '@/lib/palette';
 import { TIMING } from './engine/constants';
 import { createGame, playerWon, primaryAction, stepGame } from './engine/physics';
 import { renderGame, type View } from './engine/render';
+import { SoundWatch } from './sounds';
 import type { StageId } from './engine/stages';
 import type { GameState, Input } from './engine/types';
 
@@ -119,6 +121,7 @@ export function useVolleyballGame({
     let raf = 0;
     let last = performance.now();
     let acc = 0;
+    const sounds = new SoundWatch();
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min((now - last) / 1000, TIMING.MAX_FRAME);
@@ -131,9 +134,12 @@ export function useVolleyballGame({
         acc -= TIMING.STEP;
       }
       if (before !== 'over' && g.phase === 'over') {
+        sfx(playerWon(g) ? 'win' : 'lose');
         events.current.onFinish({ stage: g.stage.id, won: playerWon(g) });
       }
       renderGame(ctx, g, view, palette, stringsRef.current);
+      // Sounds from what was just drawn: jumps, touches, the net, points (sounds.ts).
+      for (const h of sounds.next(g)) sfx(h.name, h.amount);
     };
     raf = requestAnimationFrame(frame);
 

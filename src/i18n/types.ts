@@ -211,6 +211,8 @@ export interface Dictionary {
     game: GameStrings;
     /** Link to the full game (its own site): online 1×1, Endless, rankings. */
     online: string;
+    /** The sound control in the panel's toolbar (lib/audio): effects and music volumes. */
+    sound: { button: string; title: string; effects: string; music: string; off: string; hint: string };
     /** Under the section's buttons: what the full game has. */
     onlineHint: string;
     /** Card over the court after the boss match, pointing at the full game. */
