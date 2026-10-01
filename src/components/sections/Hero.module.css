@@ -47,11 +47,13 @@
 
 .title {
   margin: 0;
-  max-width: 17ch;
-  font-weight: 500;
-  font-size: clamp(40px, 7vw, 92px);
-  line-height: 1;
-  letter-spacing: -0.035em;
+  max-width: 15ch;
+  /* Handwritten: Caveat reads small next to Inter, so it is set bigger, with no tracking. */
+  font-family: var(--font-hand), 'Segoe Script', 'Bradley Hand', cursive;
+  font-weight: 700;
+  font-size: clamp(52px, 9vw, 124px);
+  line-height: 1.02;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 

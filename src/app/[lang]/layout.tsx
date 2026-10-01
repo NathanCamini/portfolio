@@ -5,7 +5,7 @@ import { Providers } from '@/components/Providers';
 import { site } from '@/config/site';
 import { htmlLang, isLocale, locales } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
-import { inter } from '../fonts';
+import { caveat, inter } from '../fonts';
 import '../globals.css';
 
 // Pre-render /pt and /en at build time; any other first segment is a 404.
@@ -51,7 +51,7 @@ export default async function RootLayout({ children, params }: LayoutProps<'/[la
   if (!isLocale(lang)) notFound();
 
   return (
-    <html lang={htmlLang[lang]} className={inter.variable}>
+    <html lang={htmlLang[lang]} className={`${inter.variable} ${caveat.variable}`}>
       <body>
         <Providers locale={lang}>{children}</Providers>
         <CloudflareAnalytics />

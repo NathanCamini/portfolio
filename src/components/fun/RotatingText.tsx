@@ -2,21 +2,42 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { HandWrite } from './HandWrite';
 import styles from './RotatingText.module.css';
 
 /**
- * Cycles through `words`; each one flips in letter by letter (3D tilt + blur)
- * and flips out upward. Screen readers get all options once, as plain text.
+ * Cycles through `words`; each phrase is written out by hand (see HandWrite) and fades away
+ * before the next one starts. `startDelay` (s) postpones the first phrase, so it can follow text
+ * written just before it. Screen readers get all options once, as plain text.
  */
-export function RotatingText({ words, interval = 3600 }: { words: string[]; interval?: number }) {
+export function RotatingText({
+  words,
+  interval = 4600,
+  startDelay = 0,
+}: {
+  words: string[];
+  interval?: number;
+  startDelay?: number;
+}) {
   const [i, setI] = useState(0);
   const reduce = useReducedMotion();
 
   useEffect(() => {
     if (reduce || words.length < 2) return;
-    const id = window.setInterval(() => setI((n) => (n + 1) % words.length), interval);
-    return () => window.clearInterval(id);
-  }, [words.length, interval, reduce]);
+    // The first phrase also waits for `startDelay`, so its slot of time starts after it.
+    let id: number;
+    const start = window.setTimeout(
+      () => {
+        setI((n) => (n + 1) % words.length);
+        id = window.setInterval(() => setI((n) => (n + 1) % words.length), interval);
+      },
+      interval + startDelay * 1000,
+    );
+    return () => {
+      window.clearTimeout(start);
+      window.clearInterval(id);
+    };
+  }, [words.length, interval, reduce, startDelay]);
 
   const word = words[i % words.length];
 
@@ -30,40 +51,14 @@ export function RotatingText({ words, interval = 3600 }: { words: string[]; inte
           {w}
         </span>
       ))}
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span key={word} className={styles.word} aria-hidden="true" initial="in" animate="show" exit="out">
-          {word.split(' ').map((w, wi, arr) => (
-            <span key={wi} className={styles.chunk}>
-              {Array.from(w).map((ch, ci) => (
-                <motion.span
-                  key={ci}
-                  className={styles.char}
-                  variants={{
-                    in: { y: '0.55em', rotateX: -85, opacity: 0, filter: 'blur(6px)' },
-                    // Letters cascade in…
-                    show: {
-                      y: 0,
-                      rotateX: 0,
-                      opacity: 1,
-                      filter: 'blur(0px)',
-                      transition: { duration: 0.45, delay: (wi * 6 + ci) * 0.016, ease: [0.2, 0.7, 0.2, 1] },
-                    },
-                    // …and leave together, quickly, so each phrase gets most of the interval on screen.
-                    out: {
-                      y: '-0.45em',
-                      rotateX: 70,
-                      opacity: 0,
-                      filter: 'blur(4px)',
-                      transition: { duration: 0.22, delay: (wi * 6 + ci) * 0.004 },
-                    },
-                  }}
-                >
-                  {ch}
-                </motion.span>
-              ))}
-              {wi < arr.length - 1 ? ' ' : null}
-            </span>
-          ))}
+      <AnimatePresence mode="wait" initial>
+        <motion.span
+          key={word}
+          className={styles.word}
+          aria-hidden="true"
+          exit={{ opacity: 0, transition: { duration: 0.3 } }}
+        >
+          <HandWrite text={word} delay={i === 0 ? startDelay : 0.05} />
         </motion.span>
       </AnimatePresence>
     </span>
